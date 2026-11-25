@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>English Speaking Notes</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --surface: #f6f5f2;
+  --surface-card: #ffffff;
+  --surface-input: #ffffff;
+  --accent: #0e8a7d;
+  --accent-light: #e8f5f3;
+  --accent-hover: #0b7569;
+  --text-1: #1a1a1a;
+  --text-2: #5c5c5c;
+  --text-3: #9a9a9a;
+  --border: #e4e2de;
+  --danger: #d4483b;
+  --danger-light: #fdf0ef;
+  --category-bg: #f0eeea;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06);
+  --radius: 10px;
+  --font: 'DM Sans', system-ui, sans-serif;
+  --mono: 'DM Mono', monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface: #121212; --surface-card: #1e1e1e; --surface-input: #2a2a2a;
+    --accent: #2fc4b4; --accent-light: #1a2e2b; --accent-hover: #26a899;
+    --text-1: #efefef; --text-2: #a0a0a0; --text-3: #6a6a6a;
+    --border: #333; --danger: #ef6b5e; --danger-light: #2a1a18;
+    --category-bg: #252525; --shadow: 0 1px 3px rgba(0,0,0,0.3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --surface: #121212; --surface-card: #1e1e1e; --surface-input: #2a2a2a;
+  --accent: #2fc4b4; --accent-light: #1a2e2b; --accent-hover: #26a899;
+  --text-1: #efefef; --text-2: #a0a0a0; --text-3: #6a6a6a;
+  --border: #333; --danger: #ef6b5e; --danger-light: #2a1a18;
+  --category-bg: #252525; --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%;
+  font-family: var(--font);
+  background: var(--surface);
+  color: var(--text-1);
+  -webkit-font-smoothing: antialiased;
+}
+body {
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* ---- LIST VIEW ---- */
+#listView { display: flex; flex-direction: column; height: 100%; }
+#listView.hidden { display: none; }
+
+.header {
+  padding: 16px 16px 12px;
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+.header .count { font-size: 13px; color: var(--text-3); font-weight: 500; }
+
+.search-bar { padding: 0 16px 12px; flex-shrink: 0; }
+.search-bar input {
+  width: 100%; padding: 10px 14px 10px 36px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-input); color: var(--text-1);
+  font: 400 15px var(--font); outline: none;
+}
+.search-bar input:focus { border-color: var(--accent); }
+.search-bar .wrap { position: relative; }
+.search-bar .wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-3); }
+
+.view-tabs {
+  display: flex; gap: 6px; padding: 0 16px 12px; flex-shrink: 0; overflow-x: auto;
+  scrollbar-width: none; -ms-overflow-style: none;
+}
+.view-tabs::-webkit-scrollbar { display: none; }
+.view-tabs button {
+  padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px;
+  background: var(--surface-card); color: var(--text-2);
+  font: 500 13px var(--font); cursor: pointer; white-space: nowrap;
+}
+.view-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.main { flex: 1; overflow-y: auto; padding: 0 16px 100px; -webkit-overflow-scrolling: touch; }
+
+.category-group { margin-bottom: 20px; }
+.category-title {
+  font-size: 13px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.6px; color: var(--accent); padding: 8px 0 6px;
+  position: sticky; top: 0; background: var(--surface); z-index: 2;
+  display: flex; align-items: center; gap: 8px;
+}
+.category-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.category-count {
+  font-size: 11px; font-weight: 500; color: var(--text-3);
+  background: var(--category-bg); padding: 2px 7px; border-radius: 10px;
+}
+
+.note-card {
+  background: var(--surface-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px;
+  box-shadow: var(--shadow); cursor: pointer; transition: transform 0.1s;
+}
+.note-card:active { transform: scale(0.98); }
+.note-card-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.note-card-preview {
+  font-size: 13px; color: var(--text-3); line-height: 1.4;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.note-card-meta { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.note-tag {
+  font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 6px;
+  background: var(--accent-light); color: var(--accent);
+}
+.note-date { font-size: 11px; color: var(--text-3); margin-left: auto; }
+
+.empty { text-align: center; padding: 60px 20px; color: var(--text-3); }
+.empty svg { margin-bottom: 12px; opacity: 0.4; }
+.empty p { font-size: 14px; line-height: 1.5; }
+
+.fab {
+  position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); right: 20px;
+  width: 56px; height: 56px; border-radius: 16px; background: var(--accent); color: #fff;
+  border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 14px rgba(14,138,125,0.35); z-index: 10;
+}
+.fab:active { transform: scale(0.92); }
+
+/* ---- DETAIL VIEW (fullscreen) ---- */
+#detailView {
+  display: none; flex-direction: column; height: 100%;
+  background: var(--surface);
+}
+#detailView.open { display: flex; }
+
+.detail-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; flex-shrink: 0; border-bottom: 1px solid var(--border);
+  background: var(--surface-card);
+}
+.detail-back {
+  width: 36px; height: 36px; border: none; background: none; cursor: pointer;
+  color: var(--accent); display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; flex-shrink: 0;
+}
+.detail-back:active { background: var(--accent-light); }
+.detail-header-title {
+  flex: 1; font-size: 16px; font-weight: 700; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.detail-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.detail-actions button {
+  width: 36px; height: 36px; border: none; background: none; cursor: pointer;
+  color: var(--text-2); display: flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+}
+.detail-actions button:active { background: var(--category-bg); }
+.detail-actions .edit-btn { color: var(--accent); }
+.detail-actions .del-btn { color: var(--danger); }
+
+.detail-body {
+  flex: 1; overflow-y: auto; padding: 20px 16px 40px;
+  -webkit-overflow-scrolling: touch;
+}
+.detail-cat-badge {
+  display: inline-block; font-size: 12px; font-weight: 500;
+  padding: 3px 10px; border-radius: 6px;
+  background: var(--accent-light); color: var(--accent); margin-bottom: 16px;
+}
+.detail-content {
+  font-size: 15px; line-height: 1.75; color: var(--text-1); word-break: break-word;
+}
+.detail-content .section-head {
+  font-weight: 700; color: var(--accent); margin-top: 20px; margin-bottom: 4px;
+  font-size: 14px; letter-spacing: 0.3px;
+}
+.detail-content .section-head:first-child { margin-top: 0; }
+.detail-content .formula {
+  display: inline-block; background: var(--accent-light); color: var(--accent);
+  font-family: var(--mono); font-size: 13px; font-weight: 500;
+  padding: 3px 10px; border-radius: 6px; margin: 4px 0;
+}
+.detail-content .example {
+  color: var(--text-2); padding-left: 12px;
+  border-left: 3px solid var(--accent-light); margin: 6px 0;
+  font-size: 14px;
+}
+.detail-content .plain-line { margin: 4px 0; }
+.detail-content .note-line {
+  font-size: 13px; color: var(--text-3); font-style: italic; margin-top: 16px;
+}
+.detail-content .gap { height: 12px; }
+
+.gemini-link {
+  display: flex; align-items: center; gap: 8px;
+  margin: 16px 0 8px; padding: 10px 14px;
+  background: linear-gradient(135deg, #4285f4 0%, #9b72cb 50%, #d96570 100%);
+  color: #fff; text-decoration: none; border-radius: 10px;
+  font: 600 14px var(--font); letter-spacing: 0.2px;
+  transition: opacity 0.15s;
+}
+.gemini-link:active { opacity: 0.8; }
+.gemini-link svg { flex-shrink: 0; }
+.prompt-box {
+  margin: 16px 0 20px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-card); overflow: hidden;
+}
+.prompt-box-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; background: var(--category-bg);
+  font: 600 12px var(--font); color: var(--text-2); letter-spacing: 0.3px;
+}
+.prompt-text {
+  padding: 10px 12px; font: 400 13px/1.55 var(--mono); color: var(--text-1);
+  white-space: pre-wrap; word-break: break-word; max-height: 160px; overflow-y: auto;
+}
+.prompt-box .gemini-link { margin: 0; border-radius: 0; justify-content: center; }
+.copy-btn {
+  border: none; background: var(--accent); color: #fff; cursor: pointer;
+  font: 600 12px var(--font); padding: 4px 10px; border-radius: 6px;
+}
+
+/* ---- MODAL ---- */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 20;
+  display: none; align-items: flex-end; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  width: 100%; max-width: 500px; max-height: 90vh;
+  background: var(--surface-card); border-radius: 16px 16px 0 0;
+  padding: 20px 16px calc(16px + env(safe-area-inset-bottom));
+  overflow-y: auto; animation: slideUp 0.25s ease-out;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal h2 { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+.modal label { display: block; font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
+.modal input, .modal textarea, .modal select {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface-input); color: var(--text-1); font: 400 15px var(--font);
+  outline: none; margin-bottom: 14px;
+}
+.modal input:focus, .modal textarea:focus, .modal select:focus { border-color: var(--accent); }
+.modal textarea { resize: vertical; min-height: 120px; line-height: 1.5; }
+.modal select { -webkit-appearance: none; appearance: none; cursor: pointer; }
+.modal .cat-row { display: flex; gap: 8px; }
+.modal .cat-row select, .modal .cat-row input { flex: 1; }
+.modal .actions { display: flex; gap: 10px; margin-top: 4px; }
+.modal .actions button {
+  flex: 1; padding: 12px; border: none; border-radius: 10px;
+  font: 600 15px var(--font); cursor: pointer;
+}
+.btn-cancel { background: var(--category-bg); color: var(--text-2); }
+.btn-save { background: var(--accent); color: #fff; }
+.btn-save:active { opacity: 0.85; }
+</style>
+</head>
+<body>
+
+<!-- LIST VIEW -->
+<div id="listView">
+  <div class="header">
+    <h1>Speaking Notes</h1>
+    <span class="count" id="totalCount"></span>
+  </div>
+  <div class="search-bar">
+    <div class="wrap">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="search" id="searchInput" placeholder="Search notes...">
+    </div>
+  </div>
+  <div class="view-tabs" id="viewTabs"><button class="active" data-cat="all">All</button></div>
+  <div class="main" id="notesList"></div>
+  <button class="fab" id="addBtn" aria-label="Add note">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+</div>
+
+<!-- DETAIL VIEW (fullscreen) -->
+<div id="detailView">
+  <div class="detail-header">
+    <button class="detail-back" id="detailBack" aria-label="Back">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div class="detail-header-title" id="detailTitle"></div>
+    <div class="detail-actions">
+      <button class="edit-btn" id="detailEdit" aria-label="Edit">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+      <button class="del-btn" id="detailDelete" aria-label="Delete">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="detail-body">
+    <div class="detail-cat-badge" id="detailCat"></div>
+    <div class="detail-content" id="detailContent"></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2 id="modalTitle">New Note</h2>
+    <label for="noteTitle">Title <span style="font-weight:400;color:var(--text-3)">(optional)</span></label>
+    <input type="text" id="noteTitle" placeholder="Leave blank to auto-generate">
+    <label for="noteBody">Note / Pattern</label>
+    <textarea id="noteBody" placeholder="Paste or type your note here..."></textarea>
+    <label>Category</label>
+    <div class="cat-row">
+      <select id="catSelect"><option value="">Choose...</option></select>
+      <input type="text" id="catNew" placeholder="or type new">
+    </div>
+    <div class="actions">
+      <button class="btn-cancel" id="cancelBtn">Cancel</button>
+      <button class="btn-save" id="saveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const KEY = 'speaking_notes_v2';
+  let notes = load();
+  let editingId = null;
+  let viewingId = null;
+  let activeCat = 'all';
+
+  function load() {
+    try { const r = localStorage.getItem(KEY); return r ? JSON.parse(r) : samples(); } catch { return samples(); }
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(notes)); } catch {} }
+  function uid() { return Math.random().toString(36).slice(2,10); }
+
+  function samples() {
+    return [
+      { id: uid(), title: 'Agreeing politely', body: "That's a great point.\nI couldn't agree more.\nYou're absolutely right about that.", category: 'Opinions', date: Date.now() - 86400000 },
+      { id: uid(), title: 'Disagreeing softly', body: "I see your point, but...\nI'm not sure I agree with that.\nI understand where you're coming from, however...", category: 'Opinions', date: Date.now() - 86400000 },
+      { id: uid(), title: 'Asking for clarification', body: "Could you elaborate on that?\nWhat do you mean by...?\nSorry, I didn't quite catch that.", category: 'Conversation', date: Date.now() - 172800000 },
+      { id: uid(), title: 'Making suggestions', body: "How about we...?\nWhy don't we...?\nWhat if we tried...?", category: 'Conversation', date: Date.now() },
+      { id: uid(), title: 'Present Perfect usage', body: "Use for experiences:\n→ I've been to Japan.\n\nUse for unfinished time:\n→ I've eaten lunch today.\n\nUse for recent events:\n→ She's just left.", category: 'Grammar', date: Date.now() - 300000 },
+      { id: uid(), title: 'Present Tense — Simple vs Continuous', body: "▶ Present Simple (အပြုအမူ)\nSub + V1 (s/es)\nနေ့စဥပုံမှန်လုပ်နေကျ / အမှန်တရား\n→ She eats rice. (သူမ ထမင်းစားတတ်တယ်။)\n\n▶ Present Simple (အခြေအနေ)\nSub + am/is/are + Adj\nအခြေအနေ / ဂုဏ်ရည် ဖော်ပြချင်ရင်\n→ She is happy. / I am tired. / He is tall.\n\n▶ Present Continuous\nSub + am/is/are + V-ing\nအခုလက်ရှိ လုပ်နေဆဲ\n→ She is eating. (သူမ စားနေတယ်။)\n\nမှတ်ချက်\nV-ing → အခုလက်ရှိ လုပ်နေဆဲ (am/is/are + V-ing)\nAdj → အခြေအနေ ဖော်ပြချင် (am/is/are + Adj)", category: 'Grammar', date: Date.now() },
+    ];
+  }
+
+  function autoTitle(body) {
+    const lines = body.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return 'Untitled';
+    let f = lines[0].replace(/^[▶●○•→\-\*\|#>]+\s*/, '').replace(/^\d+[\.\)\]:]\s*/, '').trim();
+    if (f.includes('|')) { const c = f.split('|').map(x=>x.trim()).filter(x=>x&&!/^[\-:]+$/.test(x)); f = c[0]||f; }
+    if (f.length > 50) f = f.substring(0,50).replace(/\s+\S*$/,'') + '...';
+    return f || 'Untitled';
+  }
+
+  function normCat(c) { return (c||'').trim().toLowerCase(); }
+  function findCat(input) {
+    const n = normCat(input);
+    for (const c of getCats()) { if (normCat(c) === n) return c; }
+    return null;
+  }
+  function getCats() {
+    return [...new Set(notes.map(n=>n.category))].filter(Boolean).sort((a,b)=>a.localeCompare(b,'en',{sensitivity:'base'}));
+  }
+  function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  // ---- Auto-clean pasted text on save ----
+  function isFormula(l) {
+    return /\+/.test(l) && l.length < 80 && /\b(S|Sub|Subject|V[1-3]|V-?ing|am|is|are|was|were|have|has|had|will|shall|do|does|did|Adj|Adv|Noun|N|O|Obj|Object|to|be|been|being)\b/i.test(l);
+  }
+  function normFormula(l) { return l.replace(/^(S|Subject)\s*\+/i, 'Sub +').trim(); }
+  function cleanBody(raw) {
+    const out = [];
+    const pushHead = t => { if (out.length && out[out.length-1] !== '') out.push(''); out.push('▶ ' + t.trim()); };
+    for (let l of raw.replace(/\r/g, '').split('\n')) {
+      l = l.trim();
+      if (!l) { if (out.length && out[out.length-1] !== '') out.push(''); continue; }
+      if (/^\|?\s*:?-{2,}/.test(l) || /^[-=_*]{3,}$/.test(l)) continue;
+      l = l.replace(/\*\*|__|`/g, '');
+      l = l.replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}\u{2705}\u{274C}️]+\s*/u, '').trim();
+      if (!l) continue;
+      if (l.includes('|')) { l = l.split('|').map(x => x.trim()).filter(Boolean).join(' — '); if (!l) continue; }
+      let m;
+      if ((m = l.match(/^#{1,6}\s*(.+)/))) { pushHead(m[1]); continue; }
+      if (/^[▶●]/.test(l)) { pushHead(l.replace(/^[▶●]\s*/, '')); continue; }
+      if ((m = l.match(/^(?:ex(?:ample)?s?|e\.g\.?|eg)\s*[:.\-]\s*(.+)/i))) { out.push('→ ' + m[1]); continue; }
+      if ((m = l.match(/^(?:formula|pattern|structure)\s*[:\-]\s*(.+)/i))) { out.push(normFormula(m[1])); continue; }
+      if (isFormula(l)) { out.push(normFormula(l)); continue; }
+      if ((m = l.match(/^[-*•·◦]\s*(.+)/))) { out.push('→ ' + m[1]); continue; }
+      if ((m = l.match(/^(?:[→➔➜]|=>|->)+\s*(.+)/))) { out.push('→ ' + m[1]); continue; }
+      if ((m = l.match(/^\d+[.)]\s*(.+)/)) && m[1].length < 40 && !/[.?!။]$/.test(m[1])) { pushHead(m[1]); continue; }
+      if (l.length < 40 && /[:：]$/.test(l) && !/^(မှတ်ချက်|note|tip)/i.test(l)) { pushHead(l.replace(/[:：]$/, '')); continue; }
+      out.push(l);
+    }
+    while (out.length && out[out.length-1] === '') out.pop();
+    while (out.length && out[0] === '') out.shift();
+    return out.join('\n');
+  }
+
+  // ---- Render formatted body for detail view ----
+  function renderBody(body) {
+    const lines = body.split('\n');
+    let html = '';
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) { html += '<div class="gap"></div>'; continue; }
+      if (/^[▶●]/.test(line)) {
+        html += '<div class="section-head">' + esc(line) + '</div>';
+      } else if (/^(Sub\s*\+|Formula:|Pattern:)/i.test(line) || isFormula(line)) {
+        html += '<div><span class="formula">' + esc(line) + '</span></div>';
+      } else if (/^[→➔➜]/.test(line)) {
+        html += '<div class="example">' + esc(line) + '</div>';
+      } else if (/^(မှတ်ချက်|Note|Tip|Remember)/i.test(line)) {
+        html += '<div class="note-line">' + esc(line) + '</div>';
+      } else {
+        html += '<div class="plain-line">' + esc(line) + '</div>';
+      }
+    }
+    return html;
+  }
+
+  // ---- RENDER LIST ----
+  function renderTabs() {
+    const t = document.getElementById('viewTabs');
+    const cats = getCats();
+    t.innerHTML = '<button class="'+(activeCat==='all'?'active':'')+'" data-cat="all">All</button>';
+    cats.forEach(c => { const b = document.createElement('button'); b.textContent = c; b.dataset.cat = c; if (activeCat===c) b.classList.add('active'); t.appendChild(b); });
+  }
+
+  function renderList() {
+    const container = document.getElementById('notesList');
+    const q = document.getElementById('searchInput').value.toLowerCase().trim();
+    let f = notes;
+    if (activeCat !== 'all') f = f.filter(n => n.category === activeCat);
+    if (q) f = f.filter(n => n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q) || (n.category||'').toLowerCase().includes(q));
+
+    const groups = {};
+    f.forEach(n => { const c = n.category||'Uncategorized'; if (!groups[c]) groups[c]=[]; groups[c].push(n); });
+    Object.values(groups).forEach(a => a.sort((a,b)=>a.title.localeCompare(b.title,'en',{sensitivity:'base'})));
+    const sortedCats = Object.keys(groups).sort((a,b)=>a.localeCompare(b,'en',{sensitivity:'base'}));
+
+    document.getElementById('totalCount').textContent = f.length + ' note' + (f.length!==1?'s':'');
+
+    if (!f.length) {
+      container.innerHTML = '<div class="empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><p>'+(q?'No matches.':'No notes yet. Tap + to add.')+'</p></div>';
+      return;
+    }
+
+    let html = '';
+    sortedCats.forEach(cat => {
+      html += '<div class="category-group"><div class="category-title">'+esc(cat)+' <span class="category-count">'+groups[cat].length+'</span></div>';
+      groups[cat].forEach(n => {
+        const preview = n.body.split('\n').filter(l=>l.trim()).slice(0,2).join(' · ');
+        const dateStr = new Date(n.date).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+        html += '<div class="note-card" data-id="'+n.id+'">'
+          + '<div class="note-card-title">'+esc(n.title)+'</div>'
+          + '<div class="note-card-preview">'+esc(preview)+'</div>'
+          + '<div class="note-card-meta"><span class="note-tag">'+esc(n.category||'')+'</span><span class="note-date">'+dateStr+'</span></div>'
+          + '</div>';
+      });
+      html += '</div>';
+    });
+    container.innerHTML = html;
+  }
+
+  let currentPrompt = '';
+  function buildPrompt(note) {
+    return 'I am a Burmese speaker learning English speaking.\n'
+      + 'Topic: "' + note.title + '" (' + (note.category || 'General') + ')\n\n'
+      + 'My notes:\n' + note.body + '\n\n'
+      + 'Please create practice exercises for this topic only:\n'
+      + '1. 5 fill-in-the-blank sentences\n'
+      + '2. 5 Burmese → English translation sentences\n'
+      + '3. 1 short dialogue using this pattern\n'
+      + '4. 3 speaking questions I can answer out loud\n'
+      + 'Put the answer key at the end. Explain briefly in Burmese.';
+  }
+  function copyText(text, btn) {
+    const done = () => { if (btn) { btn.textContent = 'Copied ✓'; setTimeout(() => btn.textContent = 'Copy', 1800); } };
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      done();
+    } catch {}
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(done).catch(() => {});
+  }
+
+  // ---- DETAIL VIEW ----
+  function openDetail(id) {
+    const note = notes.find(n => n.id === id);
+    if (!note) return;
+    viewingId = id;
+    document.getElementById('detailTitle').textContent = note.title;
+    document.getElementById('detailCat').textContent = note.category || 'Uncategorized';
+    currentPrompt = buildPrompt(note);
+    const geminiBtn = '<div class="prompt-box">'
+      + '<div class="prompt-box-head"><span>✨ Gemini Prompt</span><button class="copy-btn" id="copyPromptBtn">Copy</button></div>'
+      + '<div class="prompt-text">' + esc(currentPrompt) + '</div>'
+      + '<a class="gemini-link" id="openGeminiBtn" href="https://gemini.google.com/app" target="_blank" rel="noopener">Copy ပြီး Gemini ဖွင့်မယ် →</a>'
+      + '</div>';
+    document.getElementById('detailContent').innerHTML = renderBody(note.body) + geminiBtn;
+    document.getElementById('copyPromptBtn').onclick = () => copyText(currentPrompt, document.getElementById('copyPromptBtn'));
+    document.getElementById('openGeminiBtn').onclick = () => copyText(currentPrompt, document.getElementById('copyPromptBtn'));
+    document.getElementById('listView').classList.add('hidden');
+    document.getElementById('detailView').classList.add('open');
+  }
+
+  function closeDetail() {
+    viewingId = null;
+    document.getElementById('detailView').classList.remove('open');
+    document.getElementById('listView').classList.remove('hidden');
+  }
+
+  // ---- MODAL ----
+  function openModal(note) {
+    editingId = note ? note.id : null;
+    document.getElementById('modalTitle').textContent = note ? 'Edit Note' : 'New Note';
+    document.getElementById('noteTitle').value = note ? note.title : '';
+    document.getElementById('noteBody').value = note ? note.body : '';
+    const sel = document.getElementById('catSelect');
+    sel.innerHTML = '<option value="">Choose...</option>';
+    getCats().forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; if (note && note.category===c) o.selected=true; sel.appendChild(o); });
+    document.getElementById('catNew').value = '';
+    document.getElementById('modalOverlay').classList.add('open');
+    setTimeout(() => document.getElementById('noteBody').focus(), 300);
+  }
+  function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); editingId = null; }
+
+  // Claude auto-organize works only inside claude.ai; elsewhere it falls back to cleanBody()
+  const samplePromise = (window.claude && window.claude.use) ? window.claude.use('sample').catch(() => null) : Promise.resolve(null);
+
+  async function aiOrganize(raw, userTitle, userCat) {
+    const sample = await samplePromise;
+    if (!sample) return null;
+    const cats = getCats();
+    const prompt = 'You organize English-learning notes for a Burmese speaker. Rewrite the note below so it is clean and easy to read.\n\n'
+      + 'FORMAT RULES (plain text only, no markdown, no tables, no emoji, no ** or #):\n'
+      + '- Section headings: a line starting with "▶ "\n'
+      + '- Grammar formulas: a line starting with "Sub + " (e.g. "Sub + am/is/are + V-ing")\n'
+      + '- Example sentences: a line starting with "→ " (Burmese meaning in brackets after it if given)\n'
+      + '- Summary/notes at the end: first line "မှတ်ချက်" then short lines\n'
+      + '- Short Burmese explanation lines are plain lines under the formula\n'
+      + '- Put a blank line between sections\n'
+      + '- Remove repeated or unnecessary content. Fix English mistakes in examples. Keep the Burmese explanations and the user\'s own wording where possible. Do not add new topics.\n'
+      + '- A table must be turned into sections, not kept as a table.\n\n'
+      + 'Also give a short English title (max 6 words) for the topic, and a category. '
+      + (cats.length ? 'Prefer one of these existing categories if it fits: ' + cats.join(', ') + '. ' : '')
+      + 'Otherwise use a short English category like Grammar, Vocabulary, Phrases, Conversation, Opinions, Pronunciation.\n\n'
+      + 'Reply with ONLY JSON: {"title":"...","category":"...","body":"..."}\n\nNOTE:\n' + raw;
+    const r = await sample(prompt, { cache: false });
+    let t = (r && r.text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+    const s = t.indexOf('{'), e = t.lastIndexOf('}');
+    if (s < 0 || e < 0) return null;
+    const j = JSON.parse(t.slice(s, e + 1));
+    if (!j || !j.body) return null;
+    return { title: userTitle || (j.title || '').trim(), category: userCat || (j.category || '').trim(), body: cleanBody(String(j.body)) };
+  }
+
+  async function handleSave() {
+    const saveBtn = document.getElementById('saveBtn');
+    if (saveBtn.disabled) return;
+    const title = document.getElementById('noteTitle').value.trim();
+    const rawBody = document.getElementById('noteBody').value.trim();
+    const catSel = document.getElementById('catSelect').value;
+    const catNew = document.getElementById('catNew').value.trim();
+    if (!rawBody) { document.getElementById('noteBody').focus(); return; }
+
+    let userCat = '';
+    if (catNew) { userCat = findCat(catNew) || catNew; } else if (catSel) { userCat = catSel; }
+
+    let body = cleanBody(rawBody), aiTitle = '', aiCat = '';
+    saveBtn.disabled = true; saveBtn.textContent = '✨ ပြန်စီနေတယ်…';
+    try {
+      const ai = await aiOrganize(rawBody, title, userCat);
+      if (ai) { body = ai.body || body; aiTitle = ai.title; aiCat = ai.category; }
+    } catch (err) { console.warn('AI organize failed', err); }
+    saveBtn.disabled = false; saveBtn.textContent = 'Save';
+
+    const finalTitle = title || aiTitle || autoTitle(body);
+    let category = userCat || (aiCat ? (findCat(aiCat) || aiCat) : 'General');
+
+    if (editingId) {
+      const idx = notes.findIndex(n => n.id === editingId);
+      if (idx !== -1) {
+        const dup = notes.find(n => n.id !== editingId && normCat(n.category)===normCat(category) && n.title.toLowerCase()===finalTitle.toLowerCase());
+        if (dup) { dup.body += '\n\n' + body; dup.date = Date.now(); notes.splice(idx,1); }
+        else { notes[idx].title = finalTitle; notes[idx].body = body; notes[idx].category = category; notes[idx].date = Date.now(); }
+      }
+    } else {
+      const ex = notes.find(n => normCat(n.category)===normCat(category) && n.title.toLowerCase()===finalTitle.toLowerCase());
+      if (ex) { ex.body += '\n\n' + body; ex.date = Date.now(); }
+      else { notes.push({ id: uid(), title: finalTitle, body, category, date: Date.now() }); }
+    }
+
+    save(); closeModal(); renderTabs(); renderList();
+    if (viewingId) {
+      const updated = notes.find(n => n.id === viewingId);
+      if (updated) openDetail(viewingId); else closeDetail();
+    }
+  }
+
+  // ---- EVENTS ----
+  document.getElementById('addBtn').addEventListener('click', () => openModal(null));
+  document.getElementById('cancelBtn').addEventListener('click', closeModal);
+  document.getElementById('saveBtn').addEventListener('click', handleSave);
+  document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target === document.getElementById('modalOverlay')) closeModal(); });
+
+  document.getElementById('catSelect').addEventListener('change', () => { if (document.getElementById('catSelect').value) document.getElementById('catNew').value = ''; });
+  document.getElementById('catNew').addEventListener('input', () => { if (document.getElementById('catNew').value.trim()) document.getElementById('catSelect').value = ''; });
+
+  document.getElementById('viewTabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; activeCat = b.dataset.cat; renderTabs(); renderList(); });
+  document.getElementById('searchInput').addEventListener('input', renderList);
+
+  document.getElementById('notesList').addEventListener('click', e => {
+    const card = e.target.closest('.note-card');
+    if (card) openDetail(card.dataset.id);
+  });
+
+  document.getElementById('detailBack').addEventListener('click', closeDetail);
+  document.getElementById('detailEdit').addEventListener('click', () => {
+    const note = notes.find(n => n.id === viewingId);
+    if (note) openModal(note);
+  });
+  document.getElementById('detailDelete').addEventListener('click', () => {
+    if (!viewingId) return;
+    notes = notes.filter(n => n.id !== viewingId);
+    save(); closeDetail(); renderTabs(); renderList();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { if (document.getElementById('modalOverlay').classList.contains('open')) closeModal(); else if (viewingId) closeDetail(); }
+    if (e.key === 'Enter' && e.metaKey && document.getElementById('modalOverlay').classList.contains('open')) handleSave();
+  });
+
+  renderTabs(); renderList();
+})();
+</script>
+</body>
+</html>
