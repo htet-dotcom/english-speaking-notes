@@ -208,6 +208,27 @@ body {
 }
 .detail-content .gap { height: 12px; }
 
+/* Section blocks */
+.sec {
+  background: var(--surface-card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px 14px; margin: 0 0 12px; box-shadow: var(--shadow);
+}
+.sec-intro { background: transparent; box-shadow: none; border-style: dashed; color: var(--text-2); }
+.sec-note { background: var(--accent-light); border-color: transparent; box-shadow: none; }
+.sec-head {
+  font-weight: 700; color: var(--accent); font-size: 16px; letter-spacing: 0.2px;
+  padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+.sec-note .sec-head { border-bottom-color: rgba(14,138,125,0.25); }
+.formula-row { margin: 2px 0 6px; }
+.sec .plain-line { margin: 4px 0; }
+.ex-group { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.ex-group .example { margin: 0 0 8px; }
+.ex-group .example:last-child { margin-bottom: 0; }
+.example .tr { display: block; font-size: 13px; color: var(--text-3); margin-top: 2px; }
+.plain-line .tr { display: block; font-size: 13px; color: var(--text-3); }
+.sec .note-line { margin: 4px 0; font-style: normal; color: var(--text-2); }
+
 .gemini-link {
   display: flex; align-items: center; gap: 8px;
   margin: 16px 0 8px; padding: 10px 14px;
@@ -993,27 +1014,55 @@ body {
   }
 
   // ---- Render formatted body for detail view ----
+  // Each ▶ section (and the intro / မှတ်ချက် part) becomes its own boxed block:
+  // heading with a rule under it → formula → explanation → examples (dashed rule above),
+  // and a Burmese translation in brackets is kept with the example right above it.
+  const HAS_MM = /[က-႟]/;
+  function lineKind(l) {
+    if (/^(Sub\s*\+|Formula:|Pattern:)/i.test(l) || isFormula(l)) return 'formula';
+    if (/^[→➔➜]/.test(l)) return 'example';
+    if (/^(မှတ်ချက်|Note|Tip|Remember)/i.test(l)) return 'note';
+    if (!HAS_MM.test(l) && (l.match(/[A-Za-z]+/g) || []).length >= 3 && /[.?!]["')]?$/.test(l)) return 'example';
+    return 'plain';
+  }
+  function itemHtml(it, kind) {
+    const tr = it.tr ? '<span class="tr">' + esc(it.tr) + '</span>' : '';
+    if (kind === 'formula') return '<div class="formula-row"><span class="formula">' + esc(it.line) + '</span></div>';
+    if (kind === 'example') return '<div class="example say-row"><span>' + esc(it.line.replace(/^[→➔➜]\s*/, '')) + tr + '</span>' + sayBtn(it.line) + '</div>';
+    if (kind === 'note') return '<div class="note-line">' + esc(it.line) + '</div>';
+    return '<div class="plain-line">' + esc(it.line) + tr + '</div>';
+  }
   function renderBody(body) {
-    const lines = body.split('\n');
-    let html = '';
-    for (const raw of lines) {
-      const line = raw.trim();
-      if (!line) { html += '<div class="gap"></div>'; continue; }
-      if (/^[▶●]/.test(line)) {
-        html += '<div class="section-head">' + esc(line) + '</div>';
-      } else if (/^(Sub\s*\+|Formula:|Pattern:)/i.test(line) || isFormula(line)) {
-        html += '<div><span class="formula">' + esc(line) + '</span></div>';
-      } else if (/^[→➔➜]/.test(line)) {
-        html += '<div class="example say-row"><span>' + esc(line) + '</span>' + sayBtn(line) + '</div>';
-      } else if (/^(မှတ်ချက်|Note|Tip|Remember)/i.test(line)) {
-        html += '<div class="note-line">' + esc(line) + '</div>';
-      } else {
-        // Burmese explanation lines get no speaker; only all-English lines do
-        const btn = /[က-႟]/.test(line) ? '' : sayBtn(line);
-        html += '<div class="plain-line say-row"><span>' + esc(line) + '</span>' + btn + '</div>';
+    const lines = body.split('\n').map(l => l.trim());
+    const secs = [];
+    let cur = { head: null, items: [], note: false };
+    const push = () => { if (cur.head || cur.items.length) secs.push(cur); };
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      if (!l) continue;
+      if (/^[▶●]/.test(l)) { push(); cur = { head: l.replace(/^[▶●]\s*/, ''), items: [], note: false }; continue; }
+      if (/^(မှတ်ချက်|Note|Tip|Remember)\s*[:：\-—]?\s*$/i.test(l) || (/^(မှတ်ချက်|မှတ်ရလွယ်)/.test(l) && l.length < 40)) {
+        push(); cur = { head: l.replace(/[:：\-—]\s*$/, ''), items: [], note: true }; continue;
       }
+      let tr = null;
+      const next = lines[i + 1] || '';
+      if (/^[(（]/.test(next) && HAS_MM.test(next) && /[A-Za-z]/.test(l) && !HAS_MM.test(l)) { tr = next; i++; }
+      cur.items.push({ line: l, tr });
     }
-    return html;
+    push();
+    return secs.map(s => {
+      let h = '<div class="sec' + (s.note ? ' sec-note' : '') + (s.head ? '' : ' sec-intro') + '">';
+      if (s.head) h += '<div class="sec-head">' + (s.note ? '📝 ' : '') + esc(s.head) + '</div>';
+      let inEx = false;
+      s.items.forEach(it => {
+        const kind = lineKind(it.line);
+        if (kind === 'example' && !inEx) { h += '<div class="ex-group">'; inEx = true; }
+        else if (kind !== 'example' && inEx) { h += '</div>'; inEx = false; }
+        h += itemHtml(it, kind);
+      });
+      if (inEx) h += '</div>';
+      return h + '</div>';
+    }).join('');
   }
 
   // ---- RENDER LIST ----
