@@ -78,7 +78,26 @@ body {
   font: 400 15px var(--font); outline: none;
 }
 .search-bar input:focus { border-color: var(--accent); }
-.search-bar .wrap { position: relative; }
+.search-bar { display: flex; gap: 8px; }
+.search-bar .wrap { position: relative; flex: 1; min-width: 0; }
+.sort-sel {
+  flex-shrink: 0; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-input); color: var(--accent); font: 600 13px var(--font); cursor: pointer;
+}
+.note-num {
+  flex-shrink: 0; align-self: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px;
+  background: var(--accent-light); color: var(--accent); font: 700 12px var(--font);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.detail-nav { display: flex; gap: 10px; margin-top: 18px; }
+.detail-nav button {
+  flex: 1; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface-card); color: var(--text-1); cursor: pointer; text-align: left;
+  font: 600 14px var(--font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.detail-nav button small { display: block; font: 500 11px var(--font); color: var(--text-3); margin-bottom: 2px; }
+.detail-nav .next { text-align: right; border-color: var(--accent); }
+.detail-nav button:disabled { visibility: hidden; }
 .search-bar .wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-3); }
 
 .view-tabs {
@@ -354,6 +373,11 @@ body {
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input type="search" id="searchInput" placeholder="Search notes...">
     </div>
+    <select id="sortSel" class="sort-sel" aria-label="Sort">
+      <option value="auto">↕ Auto</option>
+      <option value="az">A–Z</option>
+      <option value="new">Newest</option>
+    </select>
   </div>
   <div class="view-tabs" id="viewTabs"><button class="active" data-cat="all">All</button></div>
   <div class="main" id="notesList"></div>
@@ -389,6 +413,10 @@ body {
     <div class="detail-cat-badge" id="detailCat"></div>
     <button class="tidy-btn" id="detailTidy" type="button">✨ ပြန်စီ</button>
     <div class="detail-content" id="detailContent"></div>
+    <div class="detail-nav">
+      <button class="prev" id="navPrev" type="button"></button>
+      <button class="next" id="navNext" type="button"></button>
+    </div>
   </div>
 </div>
 
@@ -1122,6 +1150,45 @@ body {
     cats.forEach(c => { const b = document.createElement('button'); b.textContent = c; b.dataset.cat = c; if (activeCat===c) b.classList.add('active'); t.appendChild(b); });
   }
 
+  // ---- Sorting: "Auto" puts grammar in learning order, similar topics side by side ----
+  const SORT_KEY = 'speaking_notes_sort';
+  let sortMode = (() => { try { return localStorage.getItem(SORT_KEY) || 'auto'; } catch { return 'auto'; } })();
+  let listOrder = [];
+  // Learning order for topics that aren't tenses (lower = earlier)
+  const TOPIC_ORDER = [
+    [/\b(to be|be verb|am\s*\/\s*is\s*\/\s*are|verb to be)\b/, 10],
+    [/\bpronoun/, 20], [/\bnoun/, 30], [/\barticle|\ba\s*\/\s*an\b/, 40],
+    [/\badjective/, 50], [/\badverb/, 60], [/\bthere is|there are/, 70],
+    [/\bhave got|\bhave\s*\/\s*has\b/, 80],
+    // tenses are 100–399, see tenseRank
+    [/\bmodal|\bcan\b|\bcould\b|\bshould\b|\bmust\b|\bmay\b|\bmight\b/, 400],
+    [/\bquestion|\bwh[- ]|\byes\s*\/\s*no/, 410], [/\bnegative/, 420],
+    [/\bimperative/, 430], [/\bcomparative|superlative|comparison/, 440],
+    [/\bpreposition/, 450], [/\bconjunction|linking|connector/, 460],
+    [/\bgerund|infinitive|\bto\s*\+\s*v/, 470], [/\bpassive/, 480],
+    [/\bconditional|\bif\b/, 490], [/\breported|indirect speech|direct speech/, 500],
+    [/\brelative clause|\bwho\s*\/\s*which/, 510], [/\bphrasal verb/, 520]
+  ];
+  function tenseRank(t) {
+    const m = t.match(/\b(present|past|future)\s+(perfect\s+continuous|perfect|continuous|progressive|simple|tense)\b/);
+    if (!m) { const g = t.match(/\b(present|past|future)\b/); return g ? 100 + ['present', 'past', 'future'].indexOf(g[1]) * 100 + 50 : null; }
+    const time = ['present', 'past', 'future'].indexOf(m[1]);
+    const asp = { tense: 0, simple: 1, continuous: 2, progressive: 2, perfect: 3 }[m[2].replace(/\s+/g, ' ')] ?? 4;   // perfect continuous = 4
+    return 100 + time * 100 + asp * 10;
+  }
+  function topicRank(title) {
+    const t = (title || '').toLowerCase();
+    const r = tenseRank(t);
+    if (r !== null) return r;
+    for (const [re, rank] of TOPIC_ORDER) if (re.test(t)) return rank;
+    return 1000;   // anything else: after the known topics, A–Z
+  }
+  function noteCompare(a, b) {
+    if (sortMode === 'new') return (b.date || 0) - (a.date || 0);
+    if (sortMode === 'auto') { const d = topicRank(a.title) - topicRank(b.title); if (d) return d; }
+    return a.title.localeCompare(b.title, 'en', { sensitivity: 'base' });
+  }
+
   function renderList() {
     const container = document.getElementById('notesList');
     const q = document.getElementById('searchInput').value.toLowerCase().trim();
@@ -1131,8 +1198,10 @@ body {
 
     const groups = {};
     f.forEach(n => { const c = n.category||'Uncategorized'; if (!groups[c]) groups[c]=[]; groups[c].push(n); });
-    Object.values(groups).forEach(a => a.sort((a,b)=>a.title.localeCompare(b.title,'en',{sensitivity:'base'})));
+    Object.values(groups).forEach(a => a.sort(noteCompare));
     const sortedCats = Object.keys(groups).sort((a,b)=>a.localeCompare(b,'en',{sensitivity:'base'}));
+    listOrder = [];
+    sortedCats.forEach(c => groups[c].forEach(n => listOrder.push(n.id)));
 
     document.getElementById('totalCount').textContent = f.length + ' note' + (f.length!==1?'s':'');
 
@@ -1144,14 +1213,15 @@ body {
     let html = '';
     sortedCats.forEach(cat => {
       html += '<div class="category-group"><div class="category-title">'+esc(cat)+' <span class="category-count">'+groups[cat].length+'</span></div>';
-      groups[cat].forEach(n => {
+      groups[cat].forEach((n, i) => {
+        const num = sortMode === 'auto' ? '<span class="note-num">' + (i + 1) + '</span>' : '';
         // Preview: the section headings / formulas, so the card says what's inside at a glance
         const lines = n.body.split('\n').map(l => l.trim()).filter(Boolean);
         const heads = lines.filter(l => /^[▶●]/.test(l)).map(l => l.replace(/^[▶●]\s*/, ''));
         const preview = (heads.length ? heads : lines.map(l => l.replace(/^[→➔➜]\s*/, ''))).slice(0, 3).join(' · ');
         const dateStr = new Date(n.date).toLocaleDateString('en-US',{month:'short',day:'numeric'});
         html += '<div class="note-card" data-id="'+n.id+'">'
-          + '<div class="note-card-top"><div class="note-card-title">'+esc(n.title)+'</div><span class="note-date">'+dateStr+'</span></div>'
+          + '<div class="note-card-top">'+num+'<div class="note-card-title">'+esc(n.title)+'</div><span class="note-date">'+dateStr+'</span></div>'
           + '<div class="note-card-preview">'+esc(preview)+'</div>'
           + '</div>';
       });
@@ -1200,6 +1270,8 @@ body {
     document.getElementById('detailContent').innerHTML = renderBody(note.body) + geminiBtn;
     markSaved();
     setTidyLabel();
+    renderNav(note);
+    document.querySelector('.detail-body').scrollTop = 0;
     document.getElementById('copyPromptBtn').onclick = () => copyText(currentPrompt, document.getElementById('copyPromptBtn'));
     document.getElementById('promptToggle').onclick = () => {
       const t = document.getElementById('promptText');
@@ -1208,6 +1280,20 @@ body {
     };
     document.getElementById('listView').classList.add('hidden');
     document.getElementById('detailView').classList.add('open');
+  }
+
+  // ‹ previous / next › in the same order as the list (same category), so nothing gets skipped
+  function renderNav(note) {
+    if (!listOrder.includes(note.id)) renderList();
+    const same = listOrder.map(id => notes.find(n => n.id === id)).filter(n => n && n.category === note.category);
+    const i = same.findIndex(n => n.id === note.id);
+    const prev = same[i - 1], next = same[i + 1];
+    const p = document.getElementById('navPrev'), nx = document.getElementById('navNext');
+    p.disabled = !prev; nx.disabled = !next;
+    p.innerHTML = prev ? '<small>‹ အရင်</small>' + esc(prev.title) : '';
+    nx.innerHTML = next ? '<small>နောက်တစ်ခု ›</small>' + esc(next.title) : '';
+    p.onclick = () => prev && openDetail(prev.id);
+    nx.onclick = () => next && openDetail(next.id);
   }
 
   function closeDetail() {
@@ -1388,6 +1474,12 @@ body {
 
   document.getElementById('viewTabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; activeCat = b.dataset.cat; renderTabs(); renderList(); });
   document.getElementById('searchInput').addEventListener('input', renderList);
+  document.getElementById('sortSel').value = sortMode;
+  document.getElementById('sortSel').addEventListener('change', e => {
+    sortMode = e.target.value;
+    try { localStorage.setItem(SORT_KEY, sortMode); } catch {}
+    renderList();
+  });
 
   document.getElementById('notesList').addEventListener('click', e => {
     const card = e.target.closest('.note-card');
