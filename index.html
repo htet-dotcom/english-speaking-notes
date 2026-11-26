@@ -509,6 +509,49 @@ body {
     const w = g.split(' ').filter(Boolean);
     return w.length ? w.slice(0, 4).join(' ') : (t || 'Untitled');
   }
+  // ---- Merge new text into an existing note without repeating what it already has ----
+  // Lines are compared ignoring markers (▶ → -), spaces, case and the final full stop.
+  function normLine(l) {
+    return l.trim().replace(/^[▶●→➔➜\-*•·]\s*/, '').replace(/\s+/g, ' ').replace(/[.။!?]+$/, '').trim().toLowerCase();
+  }
+  function splitSecs(body) {
+    const secs = []; let cur = { head: null, lines: [] };
+    body.split('\n').forEach(raw => {
+      const l = raw.trim();
+      if (!l) return;
+      if (/^[▶●]/.test(l)) { if (cur.head || cur.lines.length) secs.push(cur); cur = { head: l, lines: [] }; }
+      else cur.lines.push(l);
+    });
+    if (cur.head || cur.lines.length) secs.push(cur);
+    return secs;
+  }
+  function joinSecs(secs) { return secs.map(s => (s.head ? [s.head] : []).concat(s.lines).join('\n')).join('\n\n'); }
+  function mergeBody(oldBody, newBody) {
+    const old = splitSecs(oldBody);
+    const have = new Set();
+    old.forEach(s => { if (s.head) have.add(normLine(s.head)); s.lines.forEach(l => have.add(normLine(l))); });
+    let added = 0;
+    splitSecs(newBody).forEach(s => {
+      let prevSkipped = false;
+      const fresh = s.lines.filter(l => {
+        const k = normLine(l);
+        // a bracketed Burmese translation goes with the example above it: skip it when that example was skipped
+        const isTr = /^[(（]/.test(l) && /[က-႟]/.test(l);
+        if (!k || have.has(k) || (isTr && prevSkipped)) { prevSkipped = true; return false; }
+        have.add(k); prevSkipped = false; return true;
+      });
+      const known = s.head ? old.find(o => o.head && normLine(o.head) === normLine(s.head)) : null;
+      if (!fresh.length) {
+        if (s.head && !known) { old.push({ head: s.head, lines: [] }); have.add(normLine(s.head)); added++; }
+        return;
+      }
+      added += fresh.length;
+      if (known) known.lines.push(...fresh);
+      else { old.push({ head: s.head, lines: fresh }); if (s.head) have.add(normLine(s.head)); }
+    });
+    return { body: added ? joinSecs(old) : oldBody, added };
+  }
+
   // Shorten every title and merge notes that end up with the same title in the same category
   function normalizeTitles() {
     let changed = false;
@@ -518,7 +561,7 @@ body {
       const k = normCat(n.category) + '|' + n.title.toLowerCase();
       const first = seen.get(k);
       if (!first) { seen.set(k, n); return; }
-      first.body += '\n\n' + n.body; first.date = Date.now();
+      first.body = mergeBody(first.body, n.body).body; first.date = Date.now();
       notes = notes.filter(x => x !== n);
       if (typeof cloudDeleteNote === 'function') cloudDeleteNote(n.id);
       changed = true;
@@ -1298,20 +1341,36 @@ body {
     const finalTitle = title || shortTitle(aiTitle || autoTitle(body));
     let category = userCat || (aiCat ? (findCat(aiCat) || aiCat) : 'General');
 
+    let mergedInto = null, mergeAdded = 0;
     if (editingId) {
       const idx = notes.findIndex(n => n.id === editingId);
       if (idx !== -1) {
         const dup = notes.find(n => n.id !== editingId && normCat(n.category)===normCat(category) && n.title.toLowerCase()===finalTitle.toLowerCase());
-        if (dup) { dup.body += '\n\n' + body; dup.date = Date.now(); cloudDeleteNote(notes[idx].id); notes.splice(idx,1); }
+        if (dup) {
+          const r = mergeBody(dup.body, body);
+          dup.body = r.body; dup.date = Date.now();
+          cloudDeleteNote(notes[idx].id); notes.splice(idx,1);
+          mergedInto = dup; mergeAdded = r.added;
+        }
         else { notes[idx].title = finalTitle; notes[idx].body = body; notes[idx].category = category; notes[idx].date = Date.now(); }
       }
     } else {
       const ex = notes.find(n => normCat(n.category)===normCat(category) && n.title.toLowerCase()===finalTitle.toLowerCase());
-      if (ex) { ex.body += '\n\n' + body; ex.date = Date.now(); }
+      if (ex) {
+        // Same topic already saved: add only the lines it doesn't have yet
+        const r = mergeBody(ex.body, body);
+        if (r.added) { ex.body = r.body; ex.date = Date.now(); }
+        mergedInto = ex; mergeAdded = r.added;
+      }
       else { notes.push({ id: uid(), title: finalTitle, body, category, date: Date.now() }); }
     }
 
     save(); closeModal(); renderTabs(); renderList();
+    if (mergedInto) {
+      toast(mergeAdded ? '"' + mergedInto.title + '" ထဲ အသစ် ' + mergeAdded + ' ကြောင်း ပေါင်းထည့်ပြီးပါပြီ' : '"' + mergedInto.title + '" ထဲမှာ ဒီစာတွေ ရှိပြီးသားပါ — ထပ်မထည့်ပါ');
+      openDetail(mergedInto.id);
+      return;
+    }
     if (viewingId) {
       const updated = notes.find(n => n.id === viewingId);
       if (updated) openDetail(viewingId); else closeDetail();
