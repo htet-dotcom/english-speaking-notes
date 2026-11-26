@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>English Speaking Notes</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -374,6 +375,21 @@ body {
 <!-- VOICE SETTINGS -->
 <div class="modal-overlay" id="settingsOverlay">
   <div class="modal">
+    <h2>👤 Account</h2>
+    <div id="acctSection">
+      <div id="acctOut">
+        <input type="email" id="acctEmail" placeholder="Email" autocomplete="email">
+        <input type="password" id="acctPass" placeholder="Password (အနည်းဆုံး ၆ လုံး)" autocomplete="current-password">
+        <div class="actions" style="margin:-4px 0 10px">
+          <button class="btn-cancel" id="signupBtn" type="button">Sign up</button>
+          <button class="btn-save" id="loginBtn" type="button">Login</button>
+        </div>
+      </div>
+      <div id="acctIn" class="stats" style="display:none"><span id="acctWho"></span><button class="small-btn" id="logoutBtn" type="button">Logout</button></div>
+      <div class="hint" id="syncStatus">Login ဝင်ရင် note တွေ၊ အသံတွေ၊ voice setting တွေကို online မှာ သိမ်းပြီး ဘယ်ဖုန်းကဖွင့်ဖွင့် ရမယ်။</div>
+    </div>
+    <div class="hint" id="acctClaudeHint" style="display:none">claude.ai ထဲမှာ Login / Sync မရပါ — GitHub Pages version မှာ သုံးပါ။</div>
+
     <h2>🔊 Text to Speech</h2>
     <div class="hint" id="ttsEnvHint" style="display:none;margin:-6px 0 14px;color:var(--danger)">claude.ai app ထဲမှာ အပြင်ဆိုက်တွေကို ချိတ်ခွင့်မရှိလို့ ElevenLabs မရပါ (browser အသံနဲ့ပဲ ဖတ်ပါမယ်)။ ElevenLabs အသံအတွက် GitHub Pages version ကို ဖွင့်ပြီး key ထည့်ပါ။</div>
     <label for="ttsKey">ElevenLabs API key</label>
@@ -414,7 +430,8 @@ body {
   function load() {
     try { const r = localStorage.getItem(KEY); return r ? JSON.parse(r) : samples(); } catch { return samples(); }
   }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(notes)); } catch {} }
+  function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(notes)); } catch {} }
+  function save() { saveLocal(); schedulePush(); }
   function uid() { return Math.random().toString(36).slice(2,10); }
 
   function samples() {
@@ -556,7 +573,13 @@ body {
   async function savedClipUrl(text, cfg) {
     const ck = clipKey(text, cfg);
     if (audioCache.has(ck)) return audioCache.get(ck);
-    const blob = await idbGet(ck);
+    let blob = await idbGet(ck);
+    if (blob) {
+      cloudEnsureClip(text, cfg, blob);          // made before login → copy it to the account too
+    } else {
+      blob = await cloudGetClip(text, cfg);      // made on another device → bring it here
+      if (blob) await idbPut(ck, blob);
+    }
     if (!blob) return null;
     const url = URL.createObjectURL(blob);
     audioCache.set(ck, url);
@@ -565,8 +588,8 @@ body {
   async function markSaved() {
     const cfg = ttsCfg();
     for (const b of document.querySelectorAll('#detailContent .say-btn')) {
-      const ck = clipKey(decodeURIComponent(b.dataset.say), cfg);
-      if (audioCache.has(ck) || await idbGet(ck)) b.classList.add('saved');
+      const text = decodeURIComponent(b.dataset.say), ck = clipKey(text, cfg);
+      if (audioCache.has(ck) || await idbGet(ck) || await cloudHasClip(text, cfg)) b.classList.add('saved');
     }
   }
 
@@ -587,6 +610,7 @@ body {
     }
     const blob = await res.blob();
     await idbPut(ck, blob);
+    cloudPutClip(text, cfg, blob);
     const url = URL.createObjectURL(blob);
     audioCache.set(ck, url);
     document.querySelectorAll('#detailContent .say-btn').forEach(b => { if (decodeURIComponent(b.dataset.say) === text) b.classList.add('saved'); });
@@ -670,11 +694,13 @@ body {
     document.getElementById('ttsModel').value = cfg.model || 'eleven_flash_v2_5';
     document.getElementById('ttsEnvHint').style.display = IN_CLAUDE ? 'block' : 'none';
     showClipStats();
+    renderAccount();
     document.getElementById('settingsOverlay').classList.add('open');
   }
   async function showClipStats() {
     const s = await idbStats();
-    document.getElementById('clipStats').textContent = s.count + ' ကြောင်း · ' + (s.bytes / 1048576).toFixed(1) + ' MB';
+    document.getElementById('clipStats').textContent = 'ဖုန်းထဲ ' + s.count + ' ကြောင်း · ' + (s.bytes / 1048576).toFixed(1) + ' MB'
+      + (sbUser ? ' · Online ' + cloudClips.size + ' ကြောင်း' : '');
   }
   function closeSettings() { document.getElementById('settingsOverlay').classList.remove('open'); }
   function readSettingsForm() {
@@ -706,6 +732,159 @@ body {
       toast('Voices မယူနိုင်ပါ: ' + err.message);
     }
     btn.textContent = 'ကိုယ့် account ထဲက voices ယူမယ်';
+  }
+
+  // ---- ONLINE ACCOUNT (Supabase): notes, voice settings and voice clips follow the login ----
+  const SB_URL = 'https://krtmupvlgjecgitajpjd.supabase.co';
+  const SB_KEY = 'sb_publishable_bOC6gMANCxXeHP9C99k-WA_aMR41hWa';   // publishable key: safe in the page, data is protected by RLS
+  const SYNCED_FLAG = 'speaking_notes_synced_user';
+  let sb = null, sbUser = null, pushTimer = null;
+  const cloudClips = new Set();
+
+  function setSync(msg) { const el = document.getElementById('syncStatus'); if (el && msg) el.textContent = msg; }
+  function renderAccount() {
+    const cloudOk = !!sb;
+    document.getElementById('acctSection').style.display = cloudOk ? 'block' : 'none';
+    document.getElementById('acctClaudeHint').style.display = cloudOk ? 'none' : 'block';
+    document.getElementById('acctOut').style.display = sbUser ? 'none' : 'block';
+    document.getElementById('acctIn').style.display = sbUser ? 'flex' : 'none';
+    document.getElementById('acctWho').textContent = sbUser ? '✓ ' + (sbUser.email || 'Logged in') : '';
+  }
+  function initCloud() {
+    if (IN_CLAUDE || !window.supabase || !window.supabase.createClient) { renderAccount(); return; }
+    sb = window.supabase.createClient(SB_URL, SB_KEY);
+    sb.auth.onAuthStateChange((event, session) => {
+      const u = session ? session.user : null;
+      const changed = (u && u.id) !== (sbUser && sbUser.id);
+      sbUser = u;
+      renderAccount();
+      if (changed) { if (u) setTimeout(onLogin, 0); else onLogout(); }
+    });
+    renderAccount();
+  }
+  async function onLogin() {
+    setSync('Sync လုပ်နေတယ်…');
+    try {
+      await pullSettings();
+      await syncNotes();
+      await loadCloudClips();
+      setSync('✓ Sync ပြီးပါပြီ');
+      if (viewingId) markSaved();
+      if (document.getElementById('settingsOverlay').classList.contains('open')) showClipStats();
+    } catch (err) {
+      setSync('Sync error: ' + (err.message || err));
+    }
+  }
+  function onLogout() {
+    cloudClips.clear();
+    setSync('Logout ထွက်ပြီးပါပြီ။ ဖုန်းထဲမှာ သိမ်းထားတာတွေ ဆက်သုံးလို့ရတယ်။');
+  }
+
+  // Notes: first login on a device merges this phone's notes into the account; after that the account is the source of truth
+  async function syncNotes() {
+    const { data, error } = await sb.from('notes').select('id,title,body,category,date');
+    if (error) throw error;
+    const cloud = (data || []).map(r => ({ id: r.id, title: r.title, body: r.body, category: r.category, date: Number(r.date) || 0 }));
+    if (localStorage.getItem(SYNCED_FLAG) === sbUser.id) {
+      notes = cloud;
+    } else {
+      const map = new Map(cloud.map(n => [n.id, n]));
+      notes.forEach(n => { const c = map.get(n.id); if (!c || (n.date || 0) > (c.date || 0)) map.set(n.id, n); });
+      notes = [...map.values()];
+      await pushNotesNow();
+      try { localStorage.setItem(SYNCED_FLAG, sbUser.id); } catch {}
+    }
+    saveLocal(); renderTabs(); renderList();
+    if (viewingId) { if (notes.find(n => n.id === viewingId)) openDetail(viewingId); else closeDetail(); }
+  }
+  async function pushNotesNow() {
+    if (!sb || !sbUser || !notes.length) return;
+    const now = new Date().toISOString();
+    const rows = notes.map(n => ({ user_id: sbUser.id, id: n.id, title: n.title, body: n.body, category: n.category || 'General', date: n.date || 0, updated_at: now }));
+    const { error } = await sb.from('notes').upsert(rows, { onConflict: 'user_id,id' });
+    if (error) throw error;
+  }
+  function schedulePush() {
+    if (!sb || !sbUser) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(() => {
+      pushNotesNow().then(() => setSync('✓ Sync ပြီးပါပြီ')).catch(err => { setSync('Sync error: ' + err.message); toast('Online မသိမ်းနိုင်ပါ: ' + err.message); });
+    }, 600);
+  }
+  function cloudDeleteNote(id) {
+    if (!sb || !sbUser) return;
+    sb.from('notes').delete().eq('id', id).then(({ error }) => { if (error) toast('Online မဖျက်နိုင်ပါ: ' + error.message); });
+  }
+
+  // Voice settings (incl. ElevenLabs key) live in the user's own row
+  async function pullSettings() {
+    const { data, error } = await sb.from('user_settings').select('tts').maybeSingle();
+    if (error) throw error;
+    if (data && data.tts && Object.keys(data.tts).length) {
+      try { localStorage.setItem(TTS_KEY, JSON.stringify(data.tts)); } catch {}
+    } else {
+      const local = ttsCfg();
+      if (Object.keys(local).length) await pushSettings(local);
+    }
+  }
+  async function pushSettings(cfg) {
+    if (!sb || !sbUser) return;
+    const { error } = await sb.from('user_settings').upsert({ user_id: sbUser.id, tts: cfg, updated_at: new Date().toISOString() });
+    if (error) toast('Setting online မသိမ်းနိုင်ပါ: ' + error.message);
+  }
+
+  // Voice clips: voices/<user id>/<sha256 of voice|model|text>.mp3
+  async function clipPath(text, cfg) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(clipKey(text, cfg)));
+    return sbUser.id + '/' + [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 40) + '.mp3';
+  }
+  async function loadCloudClips() {
+    cloudClips.clear();
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await sb.storage.from('voices').list(sbUser.id, { limit: 1000, offset });
+      if (error) throw error;
+      (data || []).forEach(f => cloudClips.add(sbUser.id + '/' + f.name));
+      if (!data || data.length < 1000) break;
+    }
+  }
+  async function cloudHasClip(text, cfg) {
+    if (!sb || !sbUser || !window.crypto || !crypto.subtle) return false;
+    return cloudClips.has(await clipPath(text, cfg));
+  }
+  async function cloudGetClip(text, cfg) {
+    try {
+      if (!(await cloudHasClip(text, cfg))) return null;
+      const { data, error } = await sb.storage.from('voices').download(await clipPath(text, cfg));
+      return error ? null : data;
+    } catch { return null; }
+  }
+  async function cloudPutClip(text, cfg, blob) {
+    try {
+      if (!sb || !sbUser || !window.crypto || !crypto.subtle) return;
+      const p = await clipPath(text, cfg);
+      const { error } = await sb.storage.from('voices').upload(p, blob, { contentType: 'audio/mpeg', upsert: true });
+      if (error) console.warn('clip upload failed', error); else cloudClips.add(p);
+    } catch (err) { console.warn('clip upload failed', err); }
+  }
+  async function cloudEnsureClip(text, cfg, blob) {
+    if (await cloudHasClip(text, cfg)) return;
+    if (sb && sbUser) cloudPutClip(text, cfg, blob);
+  }
+
+  async function doLogin() {
+    const email = document.getElementById('acctEmail').value.trim(), password = document.getElementById('acctPass').value;
+    if (!email || !password) { toast('Email နဲ့ password ထည့်ပါ'); return; }
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) toast('Login မရပါ: ' + error.message);
+    else { toast('Login ဝင်ပြီးပါပြီ'); document.getElementById('acctPass').value = ''; }
+  }
+  async function doSignup() {
+    const email = document.getElementById('acctEmail').value.trim(), password = document.getElementById('acctPass').value;
+    if (!email || password.length < 6) { toast('Email နဲ့ password (အနည်းဆုံး ၆ လုံး) ထည့်ပါ'); return; }
+    const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } });
+    if (error) { toast('Sign up မရပါ: ' + error.message); return; }
+    if (data && data.session) toast('Account ဖွင့်ပြီး login ဝင်ပြီးပါပြီ');
+    else { toast('Email ထဲက confirm link ကိုနှိပ်ပြီးမှ Login ဝင်ပါ'); setSync('Email ထဲက confirm link ကိုနှိပ်ပြီးမှ ဒီမှာ Login ဝင်ပါ။'); }
   }
 
   // ---- Render formatted body for detail view ----
@@ -899,7 +1078,7 @@ body {
       const idx = notes.findIndex(n => n.id === editingId);
       if (idx !== -1) {
         const dup = notes.find(n => n.id !== editingId && normCat(n.category)===normCat(category) && n.title.toLowerCase()===finalTitle.toLowerCase());
-        if (dup) { dup.body += '\n\n' + body; dup.date = Date.now(); notes.splice(idx,1); }
+        if (dup) { dup.body += '\n\n' + body; dup.date = Date.now(); cloudDeleteNote(notes[idx].id); notes.splice(idx,1); }
         else { notes[idx].title = finalTitle; notes[idx].body = body; notes[idx].category = category; notes[idx].date = Date.now(); }
       }
     } else {
@@ -954,12 +1133,16 @@ body {
     showClipStats(); toast('ဖျက်ပြီးပါပြီ');
   });
   document.getElementById('settingsBtn').addEventListener('click', openSettings);
+  document.getElementById('loginBtn').addEventListener('click', doLogin);
+  document.getElementById('signupBtn').addEventListener('click', doSignup);
+  document.getElementById('logoutBtn').addEventListener('click', () => { if (sb) sb.auth.signOut(); });
   document.getElementById('ttsCancelBtn').addEventListener('click', closeSettings);
   document.getElementById('loadVoicesBtn').addEventListener('click', loadVoices);
   document.getElementById('ttsTestBtn').addEventListener('click', () => speak('Hello! This is how your notes will sound.', null, readSettingsForm()));
   document.getElementById('ttsSaveBtn').addEventListener('click', () => {
     const cfg = readSettingsForm();
     try { localStorage.setItem(TTS_KEY, JSON.stringify(cfg)); } catch {}
+    pushSettings(cfg);
     audioCache.clear();
     closeSettings();
     toast(cfg.key ? 'ElevenLabs voice သိမ်းပြီးပါပြီ' : 'Key မရှိ — browser အသံနဲ့ ဖတ်ပေးမယ်');
@@ -971,6 +1154,7 @@ body {
   });
   document.getElementById('detailDelete').addEventListener('click', () => {
     if (!viewingId) return;
+    cloudDeleteNote(viewingId);
     notes = notes.filter(n => n.id !== viewingId);
     save(); closeDetail(); renderTabs(); renderList();
   });
@@ -981,6 +1165,7 @@ body {
   });
 
   renderTabs(); renderList();
+  initCloud();
 })();
 </script>
 </body>

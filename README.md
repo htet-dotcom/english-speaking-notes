@@ -13,7 +13,13 @@ English speaking notes နဲ့ speaking pattern တွေကို category �
 - English စာကြောင်းတိုင်းဘေးက 🔊 နဲ့ အသံထွက်ဖတ်ပေးတယ်။ Header က 🔊 က ဥပမာတွေအားလုံးကို တစ်ကြောင်းချင်း ဖတ်ပေးတယ်
 - ⚙️ ထဲမှာ ElevenLabs API key ထည့်ရင် ElevenLabs အသံနဲ့ ဖတ်မယ်၊ မထည့်ရင် browser အသံနဲ့ ဖတ်မယ်
 - ElevenLabs နဲ့ တစ်ခါဖတ်ပြီးတဲ့ အသံကို ဖုန်းထဲ (IndexedDB) သိမ်းထားလို့ နောက်တစ်ခါ API key / credit မလိုဘဲ ဖတ်ပေးတယ်။ Note ထဲက ⬇ ကိုနှိပ်ရင် အဲဒီ note ရဲ့ အသံအားလုံးကို ကြိုသိမ်းပေးတယ်
+- ⚙️ ထဲမှာ Login ဝင်ရင် note၊ အသံ၊ voice setting တွေကို Supabase (online) မှာ သိမ်းပြီး ဘယ် device ကဖွင့်ဖွင့် ရတယ်
 - Dark mode
+
+## Supabase setup (တစ်ခါပဲလုပ်ရ)
+
+1. Supabase → **SQL Editor** → `supabase-setup.sql` ထဲက စာအကုန် paste → **Run**
+2. **Authentication → URL Configuration → Site URL** ကို `https://htet-dotcom.github.io/english-speaking-notes/` ထားပါ (sign up confirm link အတွက်)
 
 ## သုံးပုံ
 
