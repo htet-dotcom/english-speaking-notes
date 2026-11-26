@@ -109,16 +109,21 @@ body {
 }
 
 .note-card {
-  background: var(--surface-card); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px;
+  background: var(--surface-card); border: 1px solid var(--border); border-left: 4px solid var(--accent);
+  border-radius: var(--radius); padding: 12px 14px 12px 12px; margin-bottom: 8px;
   box-shadow: var(--shadow); cursor: pointer; transition: transform 0.1s;
 }
 .note-card:active { transform: scale(0.98); }
-.note-card-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-.note-card-preview {
-  font-size: 13px; color: var(--text-3); line-height: 1.4;
-  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+.note-card-top { display: flex; align-items: baseline; gap: 10px; }
+.note-card-title {
+  flex: 1; min-width: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.note-card-preview {
+  font-size: 13px; color: var(--text-3); line-height: 1.4; margin-top: 3px;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
+}
+.detail-big-title { font-size: 26px; font-weight: 700; letter-spacing: -0.4px; line-height: 1.2; margin-bottom: 10px; }
 .note-card-meta { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .note-tag {
   font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 6px;
@@ -353,6 +358,7 @@ body {
     </div>
   </div>
   <div class="detail-body">
+    <div class="detail-big-title" id="detailBigTitle"></div>
     <div class="detail-cat-badge" id="detailCat"></div>
     <button class="tidy-btn" id="detailTidy" type="button">✨ ပြန်စီ</button>
     <div class="detail-content" id="detailContent"></div>
@@ -464,6 +470,33 @@ body {
     if (f.includes('|')) { const c = f.split('|').map(x=>x.trim()).filter(x=>x&&!/^[\-:]+$/.test(x)); f = c[0]||f; }
     if (f.length > 50) f = f.substring(0,50).replace(/\s+\S*$/,'') + '...';
     return f || 'Untitled';
+  }
+
+  // Short, clear titles: "Present Perfect", "Past Tense", "Making suggestions"
+  function titleCase(s) { return s.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()); }
+  function shortTitle(t) {
+    const s = (t || '').replace(/[က-႟]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const m = s.match(/\b(present|past|future)\s+(perfect\s+continuous|perfect|continuous|simple|tense)\b/i);
+    if (m) return titleCase(m[0].replace(/\s+/g, ' '));
+    const g = s.split(/\s[—–-]\s|[:(|]/)[0].replace(/\busage\b/ig, '').replace(/[.…\s]+$/, '').replace(/\s+/g, ' ').trim();
+    const w = g.split(' ').filter(Boolean);
+    return w.length ? w.slice(0, 4).join(' ') : (t || 'Untitled');
+  }
+  // Shorten every title and merge notes that end up with the same title in the same category
+  function normalizeTitles() {
+    let changed = false;
+    notes.forEach(n => { const t = shortTitle(n.title); if (t !== n.title) { n.title = t; n.date = Date.now(); changed = true; } });
+    const seen = new Map();
+    notes.slice().sort((a, b) => (a.date || 0) - (b.date || 0)).forEach(n => {
+      const k = normCat(n.category) + '|' + n.title.toLowerCase();
+      const first = seen.get(k);
+      if (!first) { seen.set(k, n); return; }
+      first.body += '\n\n' + n.body; first.date = Date.now();
+      notes = notes.filter(x => x !== n);
+      if (typeof cloudDeleteNote === 'function') cloudDeleteNote(n.id);
+      changed = true;
+    });
+    return changed;
   }
 
   function normCat(c) { return (c||'').trim().toLowerCase(); }
@@ -850,6 +883,7 @@ body {
       await pushNotesNow();
       try { localStorage.setItem(SYNCED_FLAG, sbUser.id); } catch {}
     }
+    if (normalizeTitles()) { saveLocal(); await pushNotesNow(); }
     saveLocal(); renderTabs(); renderList();
     if (viewingId) { if (notes.find(n => n.id === viewingId)) openDetail(viewingId); else closeDetail(); }
   }
@@ -1013,12 +1047,14 @@ body {
     sortedCats.forEach(cat => {
       html += '<div class="category-group"><div class="category-title">'+esc(cat)+' <span class="category-count">'+groups[cat].length+'</span></div>';
       groups[cat].forEach(n => {
-        const preview = n.body.split('\n').filter(l=>l.trim()).slice(0,2).join(' · ');
+        // Preview: the section headings / formulas, so the card says what's inside at a glance
+        const lines = n.body.split('\n').map(l => l.trim()).filter(Boolean);
+        const heads = lines.filter(l => /^[▶●]/.test(l)).map(l => l.replace(/^[▶●]\s*/, ''));
+        const preview = (heads.length ? heads : lines.map(l => l.replace(/^[→➔➜]\s*/, ''))).slice(0, 3).join(' · ');
         const dateStr = new Date(n.date).toLocaleDateString('en-US',{month:'short',day:'numeric'});
         html += '<div class="note-card" data-id="'+n.id+'">'
-          + '<div class="note-card-title">'+esc(n.title)+'</div>'
+          + '<div class="note-card-top"><div class="note-card-title">'+esc(n.title)+'</div><span class="note-date">'+dateStr+'</span></div>'
           + '<div class="note-card-preview">'+esc(preview)+'</div>'
-          + '<div class="note-card-meta"><span class="note-tag">'+esc(n.category||'')+'</span><span class="note-date">'+dateStr+'</span></div>'
           + '</div>';
       });
       html += '</div>';
@@ -1055,6 +1091,7 @@ body {
     if (!note) return;
     viewingId = id;
     document.getElementById('detailTitle').textContent = note.title;
+    document.getElementById('detailBigTitle').textContent = note.title;
     document.getElementById('detailCat').textContent = note.category || 'Uncategorized';
     currentPrompt = buildPrompt(note);
     const geminiBtn = '<div class="prompt-box">'
@@ -1133,7 +1170,7 @@ body {
       + '- Put a blank line between sections\n'
       + '- Remove repeated or unnecessary content. Fix English mistakes in examples. Keep the Burmese explanations and the user\'s own wording where possible. Do not add new topics.\n'
       + '- A table must be turned into sections, not kept as a table.\n\n'
-      + 'Also give a short English title (max 6 words) for the topic, and a category. '
+      + 'Also give a short topic name as the title (1 to 3 English words, e.g. "Present Perfect", "Past Tense", "Making Suggestions"), and a category. '
       + (cats.length ? 'Prefer one of these existing categories if it fits: ' + cats.join(', ') + '. ' : '')
       + 'Otherwise use a short English category like Grammar, Vocabulary, Phrases, Conversation, Opinions, Pronunciation.\n\n'
       + 'Reply with ONLY JSON: {"title":"...","category":"...","body":"..."}\n\nNOTE:\n' + raw;
@@ -1199,7 +1236,7 @@ body {
     } catch (err) { console.warn('AI organize failed', err); toast('AI စီမရပါ: ' + err.message + ' — ရိုးရိုးစီပြီး သိမ်းလိုက်တယ်'); }
     saveBtn.disabled = false; saveBtn.textContent = 'Save';
 
-    const finalTitle = title || aiTitle || autoTitle(body);
+    const finalTitle = title || shortTitle(aiTitle || autoTitle(body));
     let category = userCat || (aiCat ? (findCat(aiCat) || aiCat) : 'General');
 
     if (editingId) {
@@ -1293,6 +1330,7 @@ body {
     if (e.key === 'Enter' && e.metaKey && document.getElementById('modalOverlay').classList.contains('open')) handleSave();
   });
 
+  if (normalizeTitles()) saveLocal();
   renderTabs(); renderList();
   initCloud();
 })();
