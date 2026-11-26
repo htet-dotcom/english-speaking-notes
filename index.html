@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>English Speaking Notes</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0e8a7d">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Speaking Notes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -319,6 +327,11 @@ body {
 
 /* ---- TEXT TO SPEECH ---- */
 .header-right { display: flex; align-items: center; gap: 6px; }
+.install-btn {
+  border: none; background: var(--accent); color: #fff; font: 600 12px var(--font);
+  padding: 6px 10px; border-radius: 16px; cursor: pointer;
+}
+.install-btn[hidden] { display: none; }
 .icon-btn {
   width: 34px; height: 34px; border: none; background: none; color: var(--text-2);
   cursor: pointer; border-radius: 8px; display: flex; align-items: center; justify-content: center;
@@ -363,6 +376,7 @@ body {
     <h1>Speaking Notes</h1>
     <div class="header-right">
       <span class="count" id="totalCount"></span>
+      <button class="install-btn" id="installBtn" type="button" hidden>📲 Install</button>
       <button class="icon-btn" id="settingsBtn" aria-label="Voice settings">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
@@ -1543,6 +1557,26 @@ body {
   if (normalizeTitles()) saveLocal();
   renderTabs(); renderList();
   initCloud();
+
+  // ---- Install as an app (PWA) ----
+  if (!IN_CLAUDE && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW register failed', err));
+  }
+  let installEvt = null;
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault(); installEvt = e;
+    document.getElementById('installBtn').hidden = false;
+  });
+  window.addEventListener('appinstalled', () => {
+    installEvt = null; document.getElementById('installBtn').hidden = true;
+    toast('App ထည့်ပြီးပါပြီ — Home screen က Speaking Notes ကို ဖွင့်ပါ');
+  });
+  document.getElementById('installBtn').addEventListener('click', async () => {
+    if (!installEvt) return;
+    installEvt.prompt();
+    try { await installEvt.userChoice; } catch {}
+    installEvt = null; document.getElementById('installBtn').hidden = true;
+  });
 })();
 </script>
 </body>

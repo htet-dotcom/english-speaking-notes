@@ -22,6 +22,13 @@ English speaking notes နဲ့ speaking pattern တွေကို category �
 1. Supabase → **SQL Editor** → `supabase-setup.sql` ထဲက စာအကုန် paste → **Run**
 2. **Authentication → URL Configuration → Site URL** ကို `https://htet-dotcom.github.io/english-speaking-notes/` ထားပါ (sign up confirm link အတွက်)
 
+## ဖုန်းမှာ App အဖြစ် ထည့်နည်း
+
+- **Android (Chrome):** `https://htet-dotcom.github.io/english-speaking-notes/` ကိုဖွင့် → ထိပ်က **📲 Install** (ဒါမှမဟုတ် ⋮ → **Add to Home screen / Install app**)
+- **iPhone (Safari):** Share ⬆ → **Add to Home Screen**
+
+Install ပြီးရင် home screen က **Speaking Notes** icon ကနေ app လိုပဲ ဖွင့်လို့ရတယ်။ Internet မရှိလည်း ဖွင့်ပြီး note တွေ ဖတ်လို့ရတယ်။
+
 ## သုံးပုံ
 
 `index.html` တစ်ဖိုင်တည်းပါ။ Browser နဲ့ တန်းဖွင့်လို့ရတယ်။
