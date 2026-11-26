@@ -12,6 +12,7 @@ English speaking notes နဲ့ speaking pattern တွေကို category �
 - Note တစ်ခုချင်းစီအတွက် Gemini practice-exercise prompt (Copy ပြီး Gemini ဖွင့်)
 - English စာကြောင်းတိုင်းဘေးက 🔊 နဲ့ အသံထွက်ဖတ်ပေးတယ်။ Header က 🔊 က ဥပမာတွေအားလုံးကို တစ်ကြောင်းချင်း ဖတ်ပေးတယ်
 - ⚙️ ထဲမှာ ElevenLabs API key ထည့်ရင် ElevenLabs အသံနဲ့ ဖတ်မယ်၊ မထည့်ရင် browser အသံနဲ့ ဖတ်မယ်
+- ElevenLabs နဲ့ တစ်ခါဖတ်ပြီးတဲ့ အသံကို ဖုန်းထဲ (IndexedDB) သိမ်းထားလို့ နောက်တစ်ခါ API key / credit မလိုဘဲ ဖတ်ပေးတယ်။ Note ထဲက ⬇ ကိုနှိပ်ရင် အဲဒီ note ရဲ့ အသံအားလုံးကို ကြိုသိမ်းပေးတယ်
 - Dark mode
 
 ## သုံးပုံ

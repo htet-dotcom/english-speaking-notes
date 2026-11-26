@@ -279,6 +279,9 @@ body {
   display: flex; align-items: center; justify-content: center;
 }
 .say-btn.playing { background: var(--accent); color: #fff; }
+.say-btn.saved { box-shadow: inset 0 0 0 2px var(--accent); }
+.modal .stats { font-size: 13px; color: var(--text-2); margin: -4px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.modal .stats .small-btn { margin: 0; color: var(--danger); }
 .detail-actions .play-btn { color: var(--accent); }
 .modal .hint { font-size: 12px; color: var(--text-3); margin: -8px 0 14px; line-height: 1.5; }
 .modal .small-btn {
@@ -328,6 +331,9 @@ body {
     </button>
     <div class="detail-header-title" id="detailTitle"></div>
     <div class="detail-actions">
+      <button class="play-btn" id="detailSaveAudio" aria-label="Save audio for this note">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
       <button class="play-btn" id="detailPlay" aria-label="Read all examples aloud">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
       </button>
@@ -384,6 +390,9 @@ body {
       <option value="eleven_flash_v2_5">Flash v2.5 — မြန်၊ credit သက်သာ</option>
       <option value="eleven_multilingual_v2">Multilingual v2 — အသံပိုကောင်း</option>
     </select>
+    <label>သိမ်းထားတဲ့ အသံ</label>
+    <div class="stats"><span id="clipStats">…</span><button class="small-btn" id="clearClipsBtn" type="button">ဖျက်မယ်</button></div>
+    <div class="hint">တစ်ခါဖတ်ပြီးတဲ့ စာကြောင်းကို ဒီဖုန်းထဲ သိမ်းထားလို့ နောက်တစ်ခါ API (credit) မသုံးဘဲ ဖတ်ပေးတယ်။ အဝိုင်းပါတဲ့ 🔊 = သိမ်းပြီးသား။</div>
     <div class="actions">
       <button class="btn-cancel" id="ttsTestBtn" type="button">🔊 Test</button>
       <button class="btn-cancel" id="ttsCancelBtn" type="button">Cancel</button>
@@ -504,10 +513,68 @@ body {
     if (window.speechSynthesis) speechSynthesis.cancel();
     if (curBtn) { curBtn.classList.remove('playing'); curBtn = null; }
   }
+  // ---- Saved voice clips (IndexedDB) — once a line is made, it plays forever without the API ----
+  const DB_NAME = 'speaking_notes_audio', STORE = 'clips';
+  let dbPromise = null;
+  function audioDB() {
+    if (!dbPromise) dbPromise = new Promise(res => {
+      try {
+        if (!window.indexedDB) return res(null);
+        const r = indexedDB.open(DB_NAME, 1);
+        r.onupgradeneeded = () => r.result.createObjectStore(STORE);
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => res(null);
+      } catch { res(null); }
+    });
+    return dbPromise;
+  }
+  function idbReq(mode, fn) {
+    return audioDB().then(db => new Promise(res => {
+      if (!db) return res(null);
+      try {
+        const q = fn(db.transaction(STORE, mode).objectStore(STORE));
+        q.onsuccess = () => res(q.result === undefined ? null : q.result);
+        q.onerror = () => res(null);
+      } catch { res(null); }
+    }));
+  }
+  const idbGet = k => idbReq('readonly', s => s.get(k));
+  const idbPut = (k, v) => idbReq('readwrite', s => s.put(v, k));
+  const idbClear = () => idbReq('readwrite', s => s.clear());
+  function idbStats() {
+    return audioDB().then(db => new Promise(res => {
+      if (!db) return res({ count: 0, bytes: 0 });
+      let count = 0, bytes = 0;
+      try {
+        const c = db.transaction(STORE, 'readonly').objectStore(STORE).openCursor();
+        c.onsuccess = () => { const cur = c.result; if (cur) { count++; bytes += (cur.value && cur.value.size) || 0; cur.continue(); } else res({ count, bytes }); };
+        c.onerror = () => res({ count, bytes });
+      } catch { res({ count, bytes }); }
+    }));
+  }
+  function clipKey(text, cfg) { return (cfg.voice || DEFAULT_VOICE) + '|' + (cfg.model || 'eleven_flash_v2_5') + '|' + text; }
+  async function savedClipUrl(text, cfg) {
+    const ck = clipKey(text, cfg);
+    if (audioCache.has(ck)) return audioCache.get(ck);
+    const blob = await idbGet(ck);
+    if (!blob) return null;
+    const url = URL.createObjectURL(blob);
+    audioCache.set(ck, url);
+    return url;
+  }
+  async function markSaved() {
+    const cfg = ttsCfg();
+    for (const b of document.querySelectorAll('#detailContent .say-btn')) {
+      const ck = clipKey(decodeURIComponent(b.dataset.say), cfg);
+      if (audioCache.has(ck) || await idbGet(ck)) b.classList.add('saved');
+    }
+  }
+
   async function elevenAudioUrl(text, cfg) {
     const voice = cfg.voice || DEFAULT_VOICE, model = cfg.model || 'eleven_flash_v2_5';
-    const ck = voice + '|' + model + '|' + text;
-    if (audioCache.has(ck)) return audioCache.get(ck);
+    const ck = clipKey(text, cfg);
+    const saved = await savedClipUrl(text, cfg);
+    if (saved) return saved;
     const res = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(voice) + '?output_format=mp3_44100_128', {
       method: 'POST',
       headers: { 'xi-api-key': cfg.key, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
@@ -518,25 +585,55 @@ body {
       try { const j = await res.json(); if (j.detail) msg = j.detail.message || j.detail.status || (typeof j.detail === 'string' ? j.detail : msg); } catch {}
       throw new Error(msg);
     }
-    const url = URL.createObjectURL(await res.blob());
+    const blob = await res.blob();
+    await idbPut(ck, blob);
+    const url = URL.createObjectURL(blob);
     audioCache.set(ck, url);
+    document.querySelectorAll('#detailContent .say-btn').forEach(b => { if (decodeURIComponent(b.dataset.say) === text) b.classList.add('saved'); });
     return url;
+  }
+  function playUrl(url, finish) {
+    return new Promise(resolve => {
+      const a = new Audio(url); curAudio = a;
+      a.onended = a.onerror = () => { finish(); resolve(); };
+      a.play().catch(() => { finish(); resolve(); });
+    });
+  }
+  // Make and save every line of the open note without playing, so it works offline / without the key later
+  async function saveNoteAudio() {
+    const cfg = ttsCfg();
+    if (IN_CLAUDE) { toast('claude.ai ထဲမှာ ElevenLabs မရပါ — GitHub Pages မှာ သုံးပါ'); return; }
+    if (!cfg.key) { toast('⚙️ ထဲမှာ ElevenLabs key အရင်ထည့်ပါ'); return; }
+    const btns = [...document.querySelectorAll('#detailContent .say-btn')];
+    if (!btns.length) { toast('သိမ်းစရာ English စာကြောင်း မရှိပါ'); return; }
+    let made = 0, had = 0;
+    for (let i = 0; i < btns.length; i++) {
+      const text = decodeURIComponent(btns[i].dataset.say);
+      toast('အသံသိမ်းနေတယ် ' + (i + 1) + ' / ' + btns.length);
+      if (await savedClipUrl(text, cfg)) { had++; btns[i].classList.add('saved'); continue; }
+      try { await elevenAudioUrl(text, cfg); made++; }
+      catch (err) { toast('ElevenLabs: ' + err.message); return; }
+    }
+    toast('ပြီးပါပြီ — အသစ် ' + made + ' ခု သိမ်းလိုက်တယ် (ရှိပြီးသား ' + had + ' ခု)');
   }
   async function speak(text, btn, cfgOverride) {
     stopAudio();
     if (btn) { btn.classList.add('playing'); curBtn = btn; }
     const finish = () => { if (btn) btn.classList.remove('playing'); if (curBtn === btn) curBtn = null; };
     const cfg = cfgOverride || ttsCfg();
+    // 1) already saved on this device → play it, no API call, no key needed
+    const saved = await savedClipUrl(text, cfg);
+    if (saved) {
+      if (btn && curBtn !== btn) return;
+      return playUrl(saved, finish);
+    }
     if (cfg.key && IN_CLAUDE && cfgOverride) toast('claude.ai ထဲမှာ ElevenLabs မရပါ — GitHub Pages မှာ သုံးပါ');
+    // 2) new line → make it with ElevenLabs once and save it
     if (cfg.key && !IN_CLAUDE) {
       try {
         const url = await elevenAudioUrl(text, cfg);
         if (btn && curBtn !== btn) return;   // another line was tapped meanwhile
-        return await new Promise(resolve => {
-          const a = new Audio(url); curAudio = a;
-          a.onended = a.onerror = () => { finish(); resolve(); };
-          a.play().catch(() => { finish(); resolve(); });
-        });
+        return await playUrl(url, finish);
       } catch (err) {
         toast('ElevenLabs: ' + err.message + ' — browser အသံနဲ့ ဖတ်ပါမယ်');
       }
@@ -572,7 +669,12 @@ body {
     sel.value = cfg.voice || DEFAULT_VOICE;
     document.getElementById('ttsModel').value = cfg.model || 'eleven_flash_v2_5';
     document.getElementById('ttsEnvHint').style.display = IN_CLAUDE ? 'block' : 'none';
+    showClipStats();
     document.getElementById('settingsOverlay').classList.add('open');
+  }
+  async function showClipStats() {
+    const s = await idbStats();
+    document.getElementById('clipStats').textContent = s.count + ' ကြောင်း · ' + (s.bytes / 1048576).toFixed(1) + ' MB';
   }
   function closeSettings() { document.getElementById('settingsOverlay').classList.remove('open'); }
   function readSettingsForm() {
@@ -711,6 +813,7 @@ body {
       + '<a class="gemini-link" id="openGeminiBtn" href="https://gemini.google.com/app" target="_blank" rel="noopener">Copy ပြီး Gemini ဖွင့်မယ် →</a>'
       + '</div>';
     document.getElementById('detailContent').innerHTML = renderBody(note.body) + geminiBtn;
+    markSaved();
     document.getElementById('copyPromptBtn').onclick = () => copyText(currentPrompt, document.getElementById('copyPromptBtn'));
     document.getElementById('openGeminiBtn').onclick = () => copyText(currentPrompt, document.getElementById('copyPromptBtn'));
     document.getElementById('listView').classList.add('hidden');
@@ -842,6 +945,14 @@ body {
     playAll();
   });
 
+  document.getElementById('detailSaveAudio').addEventListener('click', saveNoteAudio);
+  document.getElementById('clearClipsBtn').addEventListener('click', async () => {
+    if (!confirm('သိမ်းထားတဲ့ အသံတွေ အားလုံး ဖျက်မလား?')) return;
+    await idbClear();
+    audioCache.forEach(u => URL.revokeObjectURL(u)); audioCache.clear();
+    document.querySelectorAll('.say-btn.saved').forEach(b => b.classList.remove('saved'));
+    showClipStats(); toast('ဖျက်ပြီးပါပြီ');
+  });
   document.getElementById('settingsBtn').addEventListener('click', openSettings);
   document.getElementById('ttsCancelBtn').addEventListener('click', closeSettings);
   document.getElementById('loadVoicesBtn').addEventListener('click', loadVoices);
