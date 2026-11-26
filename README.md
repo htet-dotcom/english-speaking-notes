@@ -14,6 +14,7 @@ English speaking notes နဲ့ speaking pattern တွေကို category �
 - ⚙️ ထဲမှာ ElevenLabs API key ထည့်ရင် ElevenLabs အသံနဲ့ ဖတ်မယ်၊ မထည့်ရင် browser အသံနဲ့ ဖတ်မယ်
 - ElevenLabs နဲ့ တစ်ခါဖတ်ပြီးတဲ့ အသံကို ဖုန်းထဲ (IndexedDB) သိမ်းထားလို့ နောက်တစ်ခါ API key / credit မလိုဘဲ ဖတ်ပေးတယ်။ Note ထဲက ⬇ ကိုနှိပ်ရင် အဲဒီ note ရဲ့ အသံအားလုံးကို ကြိုသိမ်းပေးတယ်
 - ⚙️ ထဲမှာ Login ဝင်ရင် note၊ အသံ၊ voice setting တွေကို Supabase (online) မှာ သိမ်းပြီး ဘယ် device ကဖွင့်ဖွင့် ရတယ်
+- Note ထဲက **✨ ပြန်စီ** နဲ့ ရှိပြီးသား note ကို ပြန်စီလို့ရတယ် (↩ နဲ့ မူလပြန်ယူလို့ရ)။ ⚙️ ထဲမှာ Gemini API key (aistudio.google.com/apikey မှာ အလကား) ထည့်ရင် AI နဲ့ စီပေးတယ်
 - Dark mode
 
 ## Supabase setup (တစ်ခါပဲလုပ်ရ)

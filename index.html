@@ -286,6 +286,11 @@ body {
 .detail-actions .play-btn { color: var(--accent); }
 .modal .hint { font-size: 12px; color: var(--text-3); margin: -8px 0 14px; line-height: 1.5; white-space: pre-line; }
 .actions button:disabled { opacity: 0.6; }
+.tidy-btn {
+  margin-left: 8px; vertical-align: top; border: 1px solid var(--accent); background: none; color: var(--accent);
+  font: 600 12px var(--font); padding: 2px 10px; border-radius: 6px; cursor: pointer;
+}
+.tidy-btn:disabled { opacity: 0.6; }
 .modal .small-btn {
   border: 1px solid var(--border); background: var(--surface-card); color: var(--accent);
   font: 600 13px var(--font); padding: 8px 12px; border-radius: 8px; cursor: pointer;
@@ -349,6 +354,7 @@ body {
   </div>
   <div class="detail-body">
     <div class="detail-cat-badge" id="detailCat"></div>
+    <button class="tidy-btn" id="detailTidy" type="button">✨ ပြန်စီ</button>
     <div class="detail-content" id="detailContent"></div>
   </div>
 </div>
@@ -407,6 +413,11 @@ body {
       <option value="eleven_flash_v2_5">Flash v2.5 — မြန်၊ credit သက်သာ</option>
       <option value="eleven_multilingual_v2">Multilingual v2 — အသံပိုကောင်း</option>
     </select>
+    <h2>✨ စာစီ (AI)</h2>
+    <label for="geminiKey">Gemini API key</label>
+    <input type="password" id="geminiKey" placeholder="AIza..." autocomplete="off" spellcheck="false">
+    <div class="hint">Save တဲ့အခါ / ✨ ပြန်စီ နှိပ်တဲ့အခါ Gemini နဲ့ စာကို ခေါင်းစဉ်၊ formula၊ ဥပမာ ခွဲစီပေးမယ်။ Key ကို aistudio.google.com/apikey မှာ အလကားယူလို့ရတယ်။ Login ဝင်ထားရင် account ထဲ သိမ်းပေးမယ်။</div>
+
     <label>သိမ်းထားတဲ့ အသံ</label>
     <div class="stats"><span id="clipStats">…</span><button class="small-btn" id="clearClipsBtn" type="button">ဖျက်မယ်</button></div>
     <div class="hint">တစ်ခါဖတ်ပြီးတဲ့ စာကြောင်းကို ဒီဖုန်းထဲ သိမ်းထားလို့ နောက်တစ်ခါ API (credit) မသုံးဘဲ ဖတ်ပေးတယ်။ အဝိုင်းပါတဲ့ 🔊 = သိမ်းပြီးသား။</div>
@@ -481,7 +492,26 @@ body {
       l = l.replace(/\*\*|__|`/g, '');
       l = l.replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}\u{2705}\u{274C}️]+\s*/u, '').trim();
       if (!l) continue;
-      if (l.includes('|')) { l = l.split('|').map(x => x.trim()).filter(Boolean).join(' — '); if (!l) continue; }
+      // Table rows ("a | b | c") and rows already flattened to "a — b — c": turn each row into its own section
+      let cells = null;
+      if (l.includes('|')) cells = l.split('|').map(x => x.trim()).filter(Boolean);
+      else if ((l.match(/ — /g) || []).length >= 2) cells = l.split(' — ').map(x => x.trim()).filter(Boolean);
+      if (cells && cells.length >= 2) {
+        const isSent = c => (c.match(/[A-Za-z]+/g) || []).length >= 3 && /[.?!]/.test(c);
+        const hasF = cells.some(isFormula), hasS = cells.some(isSent);
+        if (!hasF && !hasS) {
+          if (cells.length >= 3) continue;            // header row like "Tense | Formula | Usage | Example"
+          out.push(cells.join(' — ')); continue;
+        }
+        pushHead(cells[0]);
+        cells.slice(1).forEach(c => {
+          if (isFormula(c)) out.push(normFormula(c));
+          else if (isSent(c)) out.push('→ ' + c);
+          else out.push(c);
+        });
+        continue;
+      }
+      if (!l) continue;
       let m;
       if ((m = l.match(/^#{1,6}\s*(.+)/))) { pushHead(m[1]); continue; }
       if (/^[▶●]/.test(l)) { pushHead(l.replace(/^[▶●]\s*/, '')); continue; }
@@ -492,6 +522,8 @@ body {
       if ((m = l.match(/^(?:[→➔➜]|=>|->)+\s*(.+)/))) { out.push('→ ' + m[1]); continue; }
       if ((m = l.match(/^\d+[.)]\s*(.+)/)) && m[1].length < 40 && !/[.?!။]$/.test(m[1])) { pushHead(m[1]); continue; }
       if (l.length < 40 && /[:：]$/.test(l) && !/^(မှတ်ချက်|note|tip)/i.test(l)) { pushHead(l.replace(/[:：]$/, '')); continue; }
+      // A plain English sentence on its own line is an example
+      if (!/[က-႟]/.test(l) && (l.match(/[A-Za-z]+/g) || []).length >= 3 && /[.?!]["')]?$/.test(l)) { out.push('→ ' + l); continue; }
       out.push(l);
     }
     while (out.length && out[out.length-1] === '') out.pop();
@@ -693,6 +725,7 @@ body {
     }
     sel.value = cfg.voice || DEFAULT_VOICE;
     document.getElementById('ttsModel').value = cfg.model || 'eleven_flash_v2_5';
+    document.getElementById('geminiKey').value = cfg.geminiKey || '';
     document.getElementById('ttsEnvHint').style.display = IN_CLAUDE ? 'block' : 'none';
     showClipStats();
     renderAccount();
@@ -710,7 +743,8 @@ body {
       key: document.getElementById('ttsKey').value.trim(),
       voice: sel.value,
       voiceName: sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : '',
-      model: document.getElementById('ttsModel').value
+      model: document.getElementById('ttsModel').value,
+      geminiKey: document.getElementById('geminiKey').value.trim()
     };
   }
   async function loadVoices() {
@@ -1030,6 +1064,7 @@ body {
       + '</div>';
     document.getElementById('detailContent').innerHTML = renderBody(note.body) + geminiBtn;
     markSaved();
+    setTidyLabel();
     document.getElementById('copyPromptBtn').onclick = () => copyText(currentPrompt, document.getElementById('copyPromptBtn'));
     document.getElementById('openGeminiBtn').onclick = () => copyText(currentPrompt, document.getElementById('copyPromptBtn'));
     document.getElementById('listView').classList.add('hidden');
@@ -1061,9 +1096,32 @@ body {
   // Claude auto-organize works only inside claude.ai; elsewhere it falls back to cleanBody()
   const samplePromise = (window.claude && window.claude.use) ? window.claude.use('sample').catch(() => null) : Promise.resolve(null);
 
+  // Gemini (free key from aistudio.google.com) organizes notes on the GitHub Pages copy
+  async function geminiGenerate(prompt, key) {
+    const models = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+    let lastErr = null;
+    for (const m of models) {
+      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.2 } })
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.status === 404) { lastErr = new Error((j.error && j.error.message) || (m + ' not found')); continue; }
+      if (!res.ok) throw new Error((j.error && j.error.message) || ('HTTP ' + res.status));
+      const parts = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
+      return parts.map(p => p.text || '').join('');
+    }
+    throw lastErr || new Error('No Gemini model available');
+  }
+  async function aiAvailable() {
+    return !!(await samplePromise) || (!!ttsCfg().geminiKey && !IN_CLAUDE);
+  }
+
   async function aiOrganize(raw, userTitle, userCat) {
     const sample = await samplePromise;
-    if (!sample) return null;
+    const geminiKey = ttsCfg().geminiKey;
+    if (!sample && !(geminiKey && !IN_CLAUDE)) return null;
     const cats = getCats();
     const prompt = 'You organize English-learning notes for a Burmese speaker. Rewrite the note below so it is clean and easy to read.\n\n'
       + 'FORMAT RULES (plain text only, no markdown, no tables, no emoji, no ** or #):\n'
@@ -1079,13 +1137,46 @@ body {
       + (cats.length ? 'Prefer one of these existing categories if it fits: ' + cats.join(', ') + '. ' : '')
       + 'Otherwise use a short English category like Grammar, Vocabulary, Phrases, Conversation, Opinions, Pronunciation.\n\n'
       + 'Reply with ONLY JSON: {"title":"...","category":"...","body":"..."}\n\nNOTE:\n' + raw;
-    const r = await sample(prompt, { cache: false });
-    let t = (r && r.text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+    let answer;
+    if (sample) { const r = await sample(prompt, { cache: false }); answer = r && r.text; }
+    else answer = await geminiGenerate(prompt, geminiKey);
+    let t = (answer || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
     const s = t.indexOf('{'), e = t.lastIndexOf('}');
     if (s < 0 || e < 0) return null;
     const j = JSON.parse(t.slice(s, e + 1));
     if (!j || !j.body) return null;
     return { title: userTitle || (j.title || '').trim(), category: userCat || (j.category || '').trim(), body: cleanBody(String(j.body)) };
+  }
+
+  // ✨ Re-organize an existing note in place, with one-step undo
+  let tidyUndo = null;   // { id, body }
+  function setTidyLabel() {
+    const b = document.getElementById('detailTidy');
+    b.textContent = (tidyUndo && tidyUndo.id === viewingId) ? '↩ မူလပြန်ယူ' : '✨ ပြန်စီ';
+  }
+  async function tidyNote() {
+    const note = notes.find(n => n.id === viewingId);
+    if (!note) return;
+    if (tidyUndo && tidyUndo.id === note.id) {
+      note.body = tidyUndo.body; tidyUndo = null;
+      save(); renderList(); openDetail(note.id); toast('မူလစာ ပြန်ယူပြီးပါပြီ');
+      return;
+    }
+    const btn = document.getElementById('detailTidy');
+    btn.disabled = true; btn.textContent = '✨ စီနေတယ်…';
+    const before = note.body;
+    let body = cleanBody(before), usedAI = false;
+    try {
+      const ai = await aiOrganize(before, note.title, note.category);
+      if (ai && ai.body) { body = ai.body; usedAI = true; }
+    } catch (err) { toast('AI စီမရပါ: ' + err.message); }
+    btn.disabled = false;
+    if (body === before) { setTidyLabel(); toast('ပြောင်းစရာ မတွေ့ပါ'); return; }
+    note.body = body; note.date = Date.now();
+    tidyUndo = { id: note.id, body: before };
+    save(); renderList(); openDetail(note.id);
+    if (usedAI) toast('ပြန်စီပြီးပါပြီ — မကြိုက်ရင် ↩ နှိပ်ပါ');
+    else toast((await aiAvailable()) ? 'ရိုးရိုးစီပြီးပါပြီ' : 'ရိုးရိုးစီပြီးပါပြီ — ⚙️ ထဲ Gemini key ထည့်ရင် AI နဲ့ ပိုကောင်းအောင် စီပေးမယ်');
   }
 
   async function handleSave() {
@@ -1105,7 +1196,7 @@ body {
     try {
       const ai = await aiOrganize(rawBody, title, userCat);
       if (ai) { body = ai.body || body; aiTitle = ai.title; aiCat = ai.category; }
-    } catch (err) { console.warn('AI organize failed', err); }
+    } catch (err) { console.warn('AI organize failed', err); toast('AI စီမရပါ: ' + err.message + ' — ရိုးရိုးစီပြီး သိမ်းလိုက်တယ်'); }
     saveBtn.disabled = false; saveBtn.textContent = 'Save';
 
     const finalTitle = title || aiTitle || autoTitle(body);
@@ -1162,6 +1253,7 @@ body {
   });
 
   document.getElementById('detailSaveAudio').addEventListener('click', saveNoteAudio);
+  document.getElementById('detailTidy').addEventListener('click', tidyNote);
   document.getElementById('clearClipsBtn').addEventListener('click', async () => {
     if (!confirm('သိမ်းထားတဲ့ အသံတွေ အားလုံး ဖျက်မလား?')) return;
     await idbClear();
