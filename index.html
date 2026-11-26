@@ -248,7 +248,13 @@ body {
   padding: 8px 12px; background: var(--category-bg);
   font: 600 12px var(--font); color: var(--text-2); letter-spacing: 0.3px;
 }
+.prompt-toggle {
+  border: none; background: none; padding: 0; cursor: pointer;
+  font: 600 12px var(--font); color: var(--text-2); letter-spacing: 0.3px;
+}
+.prompt-text[hidden] { display: none; }
 .prompt-text {
+  border-top: 1px solid var(--border);
   padding: 10px 12px; font: 400 13px/1.55 var(--mono); color: var(--text-1);
   white-space: pre-wrap; word-break: break-word; max-height: 160px; overflow-y: auto;
 }
@@ -1143,16 +1149,20 @@ body {
     document.getElementById('detailBigTitle').textContent = note.title;
     document.getElementById('detailCat').textContent = note.category || 'Uncategorized';
     currentPrompt = buildPrompt(note);
+    // Collapsed by default: just the title and Copy; tap the title to see the prompt
     const geminiBtn = '<div class="prompt-box">'
-      + '<div class="prompt-box-head"><span>✨ Gemini Prompt</span><button class="copy-btn" id="copyPromptBtn">Copy</button></div>'
-      + '<div class="prompt-text">' + esc(currentPrompt) + '</div>'
-      + '<a class="gemini-link" id="openGeminiBtn" href="https://gemini.google.com/app" target="_blank" rel="noopener">Copy ပြီး Gemini ဖွင့်မယ် →</a>'
+      + '<div class="prompt-box-head"><button class="prompt-toggle" id="promptToggle" type="button">▸ ✨ Gemini Prompt</button><button class="copy-btn" id="copyPromptBtn">Copy</button></div>'
+      + '<div class="prompt-text" id="promptText" hidden>' + esc(currentPrompt) + '</div>'
       + '</div>';
     document.getElementById('detailContent').innerHTML = renderBody(note.body) + geminiBtn;
     markSaved();
     setTidyLabel();
     document.getElementById('copyPromptBtn').onclick = () => copyText(currentPrompt, document.getElementById('copyPromptBtn'));
-    document.getElementById('openGeminiBtn').onclick = () => copyText(currentPrompt, document.getElementById('copyPromptBtn'));
+    document.getElementById('promptToggle').onclick = () => {
+      const t = document.getElementById('promptText');
+      t.hidden = !t.hidden;
+      document.getElementById('promptToggle').textContent = (t.hidden ? '▸' : '▾') + ' ✨ Gemini Prompt';
+    };
     document.getElementById('listView').classList.add('hidden');
     document.getElementById('detailView').classList.add('open');
   }
