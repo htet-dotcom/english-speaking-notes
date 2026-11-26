@@ -284,7 +284,8 @@ body {
 .modal .stats { font-size: 13px; color: var(--text-2); margin: -4px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .modal .stats .small-btn { margin: 0; color: var(--danger); }
 .detail-actions .play-btn { color: var(--accent); }
-.modal .hint { font-size: 12px; color: var(--text-3); margin: -8px 0 14px; line-height: 1.5; }
+.modal .hint { font-size: 12px; color: var(--text-3); margin: -8px 0 14px; line-height: 1.5; white-space: pre-line; }
+.actions button:disabled { opacity: 0.6; }
 .modal .small-btn {
   border: 1px solid var(--border); background: var(--surface-card); color: var(--accent);
   font: 600 13px var(--font); padding: 8px 12px; border-radius: 8px; cursor: pointer;
@@ -741,11 +742,31 @@ body {
   let sb = null, sbUser = null, pushTimer = null;
   const cloudClips = new Set();
 
-  function setSync(msg) { const el = document.getElementById('syncStatus'); if (el && msg) el.textContent = msg; }
+  function setSync(msg, isError) {
+    const el = document.getElementById('syncStatus');
+    if (!el || !msg) return;
+    el.textContent = msg;
+    el.style.color = isError ? 'var(--danger)' : '';
+  }
+  // Turn Supabase auth errors into a clear Burmese explanation, keeping the original text
+  function authErrorText(err) {
+    const m = (err && (err.message || err.error_description || String(err))) || 'Unknown error';
+    let why = '';
+    if (/email not confirmed/i.test(m)) why = 'Email မ confirm ရသေးပါ။ Email ထဲက link ကိုနှိပ်ပါ (ဒါမှမဟုတ် Supabase မှာ "Confirm email" ကိုပိတ်ပါ)။';
+    else if (/invalid login credentials/i.test(m)) why = 'Email / password မှားနေတယ်၊ ဒါမှမဟုတ် account မဖွင့်ရသေးပါ (Sign up အရင်လုပ်ပါ)။';
+    else if (/rate limit|too many/i.test(m)) why = 'Supabase က confirm email ပို့တာ အကြိမ်ရေ ပြည့်သွားပြီ။ Supabase မှာ "Confirm email" ကိုပိတ်ပြီး ပြန်စမ်းပါ။';
+    else if (/already registered|already exists/i.test(m)) why = 'ဒီ email နဲ့ account ရှိပြီးသားပါ — Login ကိုနှိပ်ပါ။';
+    else if (/signups? not allowed|signup is disabled/i.test(m)) why = 'Supabase မှာ sign up ပိတ်ထားတယ် — Authentication → Sign In / Providers → "Allow new users to sign up" ဖွင့်ပါ။';
+    else if (/password/i.test(m) && /least|short|weak/i.test(m)) why = 'Password တိုလွန်း / ရိုးလွန်းတယ် — ပိုရှည်တဲ့ password သုံးပါ။';
+    else if (/invalid.*email|email.*invalid/i.test(m)) why = 'Email ပုံစံ မမှန်ပါ။';
+    else if (/failed to fetch|network|load failed/i.test(m)) why = 'Supabase ကို ချိတ်မရပါ — internet စစ်ပါ၊ Supabase project pause ဖြစ်နေရင် Restore လုပ်ပါ။';
+    return (why ? why + '\n' : '') + '(' + m + ')';
+  }
   function renderAccount() {
     const cloudOk = !!sb;
     document.getElementById('acctSection').style.display = cloudOk ? 'block' : 'none';
     document.getElementById('acctClaudeHint').style.display = cloudOk ? 'none' : 'block';
+    if (!cloudOk && !IN_CLAUDE) document.getElementById('acctClaudeHint').textContent = 'Login စနစ်ကို load မလုပ်နိုင်ပါ — internet စစ်ပြီး page ကို refresh လုပ်ပါ။';
     document.getElementById('acctOut').style.display = sbUser ? 'none' : 'block';
     document.getElementById('acctIn').style.display = sbUser ? 'flex' : 'none';
     document.getElementById('acctWho').textContent = sbUser ? '✓ ' + (sbUser.email || 'Logged in') : '';
@@ -772,7 +793,8 @@ body {
       if (viewingId) markSaved();
       if (document.getElementById('settingsOverlay').classList.contains('open')) showClipStats();
     } catch (err) {
-      setSync('Sync error: ' + (err.message || err));
+      const m = err.message || String(err);
+      setSync('Login ဝင်ပြီးပေမဲ့ Sync မရပါ' + (/relation|does not exist|schema cache|bucket not found|not found/i.test(m) ? ' — Supabase SQL Editor မှာ setup SQL ကို Run ဖို့ ကျန်နေပုံရတယ်' : '') + '\n(' + m + ')', true);
     }
   }
   function onLogout() {
@@ -871,20 +893,35 @@ body {
     if (sb && sbUser) cloudPutClip(text, cfg, blob);
   }
 
-  async function doLogin() {
-    const email = document.getElementById('acctEmail').value.trim(), password = document.getElementById('acctPass').value;
-    if (!email || !password) { toast('Email နဲ့ password ထည့်ပါ'); return; }
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) toast('Login မရပါ: ' + error.message);
-    else { toast('Login ဝင်ပြီးပါပြီ'); document.getElementById('acctPass').value = ''; }
+  async function withBusy(btnId, label, fn) {
+    const b = document.getElementById(btnId), old = b.textContent;
+    b.disabled = true; b.textContent = label;
+    try { await fn(); }
+    catch (err) { setSync(authErrorText(err), true); }
+    finally { b.disabled = false; b.textContent = old; }
   }
-  async function doSignup() {
-    const email = document.getElementById('acctEmail').value.trim(), password = document.getElementById('acctPass').value;
-    if (!email || password.length < 6) { toast('Email နဲ့ password (အနည်းဆုံး ၆ လုံး) ထည့်ပါ'); return; }
-    const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } });
-    if (error) { toast('Sign up မရပါ: ' + error.message); return; }
-    if (data && data.session) toast('Account ဖွင့်ပြီး login ဝင်ပြီးပါပြီ');
-    else { toast('Email ထဲက confirm link ကိုနှိပ်ပြီးမှ Login ဝင်ပါ'); setSync('Email ထဲက confirm link ကိုနှိပ်ပြီးမှ ဒီမှာ Login ဝင်ပါ။'); }
+  function doLogin() {
+    return withBusy('loginBtn', 'ဝင်နေတယ်…', async () => {
+      const email = document.getElementById('acctEmail').value.trim(), password = document.getElementById('acctPass').value;
+      if (!email || !password) { setSync('Email နဲ့ password ထည့်ပါ', true); return; }
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) { setSync('Login မရပါ — ' + authErrorText(error), true); return; }
+      document.getElementById('acctPass').value = '';
+      toast('Login ဝင်ပြီးပါပြီ');
+    });
+  }
+  function doSignup() {
+    return withBusy('signupBtn', 'ဖွင့်နေတယ်…', async () => {
+      const email = document.getElementById('acctEmail').value.trim(), password = document.getElementById('acctPass').value;
+      if (!email || password.length < 6) { setSync('Email နဲ့ password (အနည်းဆုံး ၆ လုံး) ထည့်ပါ', true); return; }
+      const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } });
+      if (error) { setSync('Sign up မရပါ — ' + authErrorText(error), true); return; }
+      if (data && data.session) { toast('Account ဖွင့်ပြီး login ဝင်ပြီးပါပြီ'); return; }
+      if (data && data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        setSync('ဒီ email နဲ့ account ရှိပြီးသားပါ — Login ကိုနှိပ်ပါ။', true); return;
+      }
+      setSync('Account ဖွင့်ပြီးပါပြီ။ Email (Spam folder ပါ) ထဲက confirm link ကိုနှိပ်ပြီးမှ ဒီမှာ Login ဝင်ပါ။');
+    });
   }
 
   // ---- Render formatted body for detail view ----
