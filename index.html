@@ -264,6 +264,34 @@ body {
 .btn-cancel { background: var(--category-bg); color: var(--text-2); }
 .btn-save { background: var(--accent); color: #fff; }
 .btn-save:active { opacity: 0.85; }
+
+/* ---- TEXT TO SPEECH ---- */
+.header-right { display: flex; align-items: center; gap: 6px; }
+.icon-btn {
+  width: 34px; height: 34px; border: none; background: none; color: var(--text-2);
+  cursor: pointer; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+}
+.icon-btn:active { background: var(--category-bg); }
+.say-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.say-btn {
+  flex-shrink: 0; width: 30px; height: 30px; border: none; border-radius: 50%;
+  background: var(--accent-light); color: var(--accent); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.say-btn.playing { background: var(--accent); color: #fff; }
+.detail-actions .play-btn { color: var(--accent); }
+.modal .hint { font-size: 12px; color: var(--text-3); margin: -8px 0 14px; line-height: 1.5; }
+.modal .small-btn {
+  border: 1px solid var(--border); background: var(--surface-card); color: var(--accent);
+  font: 600 13px var(--font); padding: 8px 12px; border-radius: 8px; cursor: pointer;
+  margin: -6px 0 14px;
+}
+.toast {
+  position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  background: #222; color: #fff; padding: 9px 14px; border-radius: 8px;
+  font: 500 13px var(--font); z-index: 50; display: none; max-width: 90%; text-align: center;
+}
+.toast.show { display: block; }
 </style>
 </head>
 <body>
@@ -272,7 +300,12 @@ body {
 <div id="listView">
   <div class="header">
     <h1>Speaking Notes</h1>
-    <span class="count" id="totalCount"></span>
+    <div class="header-right">
+      <span class="count" id="totalCount"></span>
+      <button class="icon-btn" id="settingsBtn" aria-label="Voice settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
   </div>
   <div class="search-bar">
     <div class="wrap">
@@ -295,6 +328,9 @@ body {
     </button>
     <div class="detail-header-title" id="detailTitle"></div>
     <div class="detail-actions">
+      <button class="play-btn" id="detailPlay" aria-label="Read all examples aloud">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+      </button>
       <button class="edit-btn" id="detailEdit" aria-label="Edit">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
       </button>
@@ -328,6 +364,34 @@ body {
     </div>
   </div>
 </div>
+
+<!-- VOICE SETTINGS -->
+<div class="modal-overlay" id="settingsOverlay">
+  <div class="modal">
+    <h2>🔊 Text to Speech</h2>
+    <label for="ttsKey">ElevenLabs API key</label>
+    <input type="password" id="ttsKey" placeholder="sk_..." autocomplete="off" spellcheck="false">
+    <div class="hint">Key ကို ဒီဖုန်း / browser ထဲမှာပဲ သိမ်းတယ်၊ GitHub ပေါ် မရောက်ဘူး။ Key မထည့်ရင် ဖုန်းရဲ့ browser အသံနဲ့ ဖတ်ပေးမယ်။</div>
+    <label for="ttsVoice">Voice</label>
+    <select id="ttsVoice">
+      <option value="JBFqnCBsd6RMkjVDRZzb">George</option>
+      <option value="21m00Tcm4TlvDq8ikWAM">Rachel</option>
+    </select>
+    <button class="small-btn" id="loadVoicesBtn" type="button">ကိုယ့် account ထဲက voices ယူမယ်</button>
+    <label for="ttsModel">Model</label>
+    <select id="ttsModel">
+      <option value="eleven_flash_v2_5">Flash v2.5 — မြန်၊ credit သက်သာ</option>
+      <option value="eleven_multilingual_v2">Multilingual v2 — အသံပိုကောင်း</option>
+    </select>
+    <div class="actions">
+      <button class="btn-cancel" id="ttsTestBtn" type="button">🔊 Test</button>
+      <button class="btn-cancel" id="ttsCancelBtn" type="button">Cancel</button>
+      <button class="btn-save" id="ttsSaveBtn" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
 
 <script>
 (function() {
@@ -407,6 +471,135 @@ body {
     return out.join('\n');
   }
 
+  // ---- TEXT TO SPEECH (ElevenLabs, falls back to browser voice) ----
+  const TTS_KEY = 'speaking_notes_tts';
+  const DEFAULT_VOICE = 'JBFqnCBsd6RMkjVDRZzb';
+  const SPEAKER_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+  const audioCache = new Map();
+  let curAudio = null, curBtn = null, playToken = 0, toastTimer = null;
+
+  function ttsCfg() { try { return JSON.parse(localStorage.getItem(TTS_KEY)) || {}; } catch { return {}; } }
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+  }
+  // English part of a line only: drop the arrow and Burmese text / Burmese brackets
+  function englishPart(line) {
+    const t = line.replace(/^[→➔➜]\s*/, '')
+      .replace(/\([^)]*[က-႟][^)]*\)/g, ' ')
+      .replace(/[က-႟]+/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+    return (t.match(/[A-Za-z]+/g) || []).length >= 2 ? t : '';
+  }
+  function sayBtn(line) {
+    const t = englishPart(line);
+    return t ? '<button class="say-btn" data-say="' + encodeURIComponent(t) + '" aria-label="Speak">' + SPEAKER_SVG + '</button>' : '';
+  }
+  function stopAudio() {
+    if (curAudio) { curAudio.pause(); curAudio = null; }
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    if (curBtn) { curBtn.classList.remove('playing'); curBtn = null; }
+  }
+  async function elevenAudioUrl(text, cfg) {
+    const voice = cfg.voice || DEFAULT_VOICE, model = cfg.model || 'eleven_flash_v2_5';
+    const ck = voice + '|' + model + '|' + text;
+    if (audioCache.has(ck)) return audioCache.get(ck);
+    const res = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(voice) + '?output_format=mp3_44100_128', {
+      method: 'POST',
+      headers: { 'xi-api-key': cfg.key, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
+      body: JSON.stringify({ text, model_id: model })
+    });
+    if (!res.ok) {
+      let msg = 'HTTP ' + res.status;
+      try { const j = await res.json(); if (j.detail) msg = j.detail.message || j.detail.status || (typeof j.detail === 'string' ? j.detail : msg); } catch {}
+      throw new Error(msg);
+    }
+    const url = URL.createObjectURL(await res.blob());
+    audioCache.set(ck, url);
+    return url;
+  }
+  async function speak(text, btn, cfgOverride) {
+    stopAudio();
+    if (btn) { btn.classList.add('playing'); curBtn = btn; }
+    const finish = () => { if (btn) btn.classList.remove('playing'); if (curBtn === btn) curBtn = null; };
+    const cfg = cfgOverride || ttsCfg();
+    if (cfg.key) {
+      try {
+        const url = await elevenAudioUrl(text, cfg);
+        if (btn && curBtn !== btn) return;   // another line was tapped meanwhile
+        return await new Promise(resolve => {
+          const a = new Audio(url); curAudio = a;
+          a.onended = a.onerror = () => { finish(); resolve(); };
+          a.play().catch(() => { finish(); resolve(); });
+        });
+      } catch (err) {
+        toast('ElevenLabs: ' + err.message + ' — browser အသံနဲ့ ဖတ်ပါမယ်');
+      }
+    }
+    return new Promise(resolve => {
+      if (!window.speechSynthesis) { finish(); resolve(); return; }
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-US'; u.rate = 0.95;
+      u.onend = u.onerror = () => { finish(); resolve(); };
+      speechSynthesis.speak(u);
+    });
+  }
+  async function playAll() {
+    const btns = [...document.querySelectorAll('#detailContent .say-btn')];
+    if (!btns.length) { toast('ဖတ်စရာ English စာကြောင်း မရှိပါ'); return; }
+    const token = ++playToken;
+    for (const b of btns) {
+      if (token !== playToken) break;
+      b.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      await speak(decodeURIComponent(b.dataset.say), b);
+      await new Promise(r => setTimeout(r, 400));
+    }
+  }
+
+  // ---- Voice settings modal ----
+  function openSettings() {
+    const cfg = ttsCfg();
+    document.getElementById('ttsKey').value = cfg.key || '';
+    const sel = document.getElementById('ttsVoice');
+    if (cfg.voice && ![...sel.options].some(o => o.value === cfg.voice)) {
+      const o = document.createElement('option'); o.value = cfg.voice; o.textContent = cfg.voiceName || cfg.voice; sel.appendChild(o);
+    }
+    sel.value = cfg.voice || DEFAULT_VOICE;
+    document.getElementById('ttsModel').value = cfg.model || 'eleven_flash_v2_5';
+    document.getElementById('settingsOverlay').classList.add('open');
+  }
+  function closeSettings() { document.getElementById('settingsOverlay').classList.remove('open'); }
+  function readSettingsForm() {
+    const sel = document.getElementById('ttsVoice');
+    return {
+      key: document.getElementById('ttsKey').value.trim(),
+      voice: sel.value,
+      voiceName: sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : '',
+      model: document.getElementById('ttsModel').value
+    };
+  }
+  async function loadVoices() {
+    const key = document.getElementById('ttsKey').value.trim();
+    if (!key) { toast('API key အရင်ထည့်ပါ'); return; }
+    const btn = document.getElementById('loadVoicesBtn');
+    btn.textContent = 'ယူနေတယ်…';
+    try {
+      const res = await fetch('https://api.elevenlabs.io/v1/voices', { headers: { 'xi-api-key': key } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const j = await res.json();
+      const sel = document.getElementById('ttsVoice'), keep = sel.value;
+      sel.innerHTML = '';
+      (j.voices || []).forEach(v => { const o = document.createElement('option'); o.value = v.voice_id; o.textContent = v.name; sel.appendChild(o); });
+      if (!sel.options.length) { const o = document.createElement('option'); o.value = DEFAULT_VOICE; o.textContent = 'George'; sel.appendChild(o); }
+      if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
+      toast(sel.options.length + ' voices ရပါပြီ');
+    } catch (err) {
+      toast('Voices မယူနိုင်ပါ: ' + err.message);
+    }
+    btn.textContent = 'ကိုယ့် account ထဲက voices ယူမယ်';
+  }
+
   // ---- Render formatted body for detail view ----
   function renderBody(body) {
     const lines = body.split('\n');
@@ -419,11 +612,11 @@ body {
       } else if (/^(Sub\s*\+|Formula:|Pattern:)/i.test(line) || isFormula(line)) {
         html += '<div><span class="formula">' + esc(line) + '</span></div>';
       } else if (/^[→➔➜]/.test(line)) {
-        html += '<div class="example">' + esc(line) + '</div>';
+        html += '<div class="example say-row"><span>' + esc(line) + '</span>' + sayBtn(line) + '</div>';
       } else if (/^(မှတ်ချက်|Note|Tip|Remember)/i.test(line)) {
         html += '<div class="note-line">' + esc(line) + '</div>';
       } else {
-        html += '<div class="plain-line">' + esc(line) + '</div>';
+        html += '<div class="plain-line say-row"><span>' + esc(line) + '</span>' + sayBtn(line) + '</div>';
       }
     }
     return html;
@@ -517,6 +710,7 @@ body {
   }
 
   function closeDetail() {
+    playToken++; stopAudio();
     viewingId = null;
     document.getElementById('detailView').classList.remove('open');
     document.getElementById('listView').classList.remove('hidden');
@@ -628,6 +822,30 @@ body {
   });
 
   document.getElementById('detailBack').addEventListener('click', closeDetail);
+  document.getElementById('detailContent').addEventListener('click', e => {
+    const b = e.target.closest('.say-btn');
+    if (!b) return;
+    playToken++;
+    if (b.classList.contains('playing')) { stopAudio(); return; }
+    speak(decodeURIComponent(b.dataset.say), b);
+  });
+  document.getElementById('detailPlay').addEventListener('click', () => {
+    if (curBtn) { playToken++; stopAudio(); return; }
+    playAll();
+  });
+
+  document.getElementById('settingsBtn').addEventListener('click', openSettings);
+  document.getElementById('ttsCancelBtn').addEventListener('click', closeSettings);
+  document.getElementById('loadVoicesBtn').addEventListener('click', loadVoices);
+  document.getElementById('ttsTestBtn').addEventListener('click', () => speak('Hello! This is how your notes will sound.', null, readSettingsForm()));
+  document.getElementById('ttsSaveBtn').addEventListener('click', () => {
+    const cfg = readSettingsForm();
+    try { localStorage.setItem(TTS_KEY, JSON.stringify(cfg)); } catch {}
+    audioCache.clear();
+    closeSettings();
+    toast(cfg.key ? 'ElevenLabs voice သိမ်းပြီးပါပြီ' : 'Key မရှိ — browser အသံနဲ့ ဖတ်ပေးမယ်');
+  });
+  document.getElementById('settingsOverlay').addEventListener('click', e => { if (e.target === document.getElementById('settingsOverlay')) closeSettings(); });
   document.getElementById('detailEdit').addEventListener('click', () => {
     const note = notes.find(n => n.id === viewingId);
     if (note) openModal(note);
