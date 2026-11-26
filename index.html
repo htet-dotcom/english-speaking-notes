@@ -369,6 +369,7 @@ body {
 <div class="modal-overlay" id="settingsOverlay">
   <div class="modal">
     <h2>🔊 Text to Speech</h2>
+    <div class="hint" id="ttsEnvHint" style="display:none;margin:-6px 0 14px;color:var(--danger)">claude.ai app ထဲမှာ အပြင်ဆိုက်တွေကို ချိတ်ခွင့်မရှိလို့ ElevenLabs မရပါ (browser အသံနဲ့ပဲ ဖတ်ပါမယ်)။ ElevenLabs အသံအတွက် GitHub Pages version ကို ဖွင့်ပြီး key ထည့်ပါ။</div>
     <label for="ttsKey">ElevenLabs API key</label>
     <input type="password" id="ttsKey" placeholder="sk_..." autocomplete="off" spellcheck="false">
     <div class="hint">Key ကို ဒီဖုန်း / browser ထဲမှာပဲ သိမ်းတယ်၊ GitHub ပေါ် မရောက်ဘူး။ Key မထည့်ရင် ဖုန်းရဲ့ browser အသံနဲ့ ဖတ်ပေးမယ်။</div>
@@ -478,6 +479,8 @@ body {
   const audioCache = new Map();
   let curAudio = null, curBtn = null, playToken = 0, toastTimer = null;
 
+  // Inside the claude.ai app, pages cannot reach outside sites, so ElevenLabs only works on the GitHub Pages copy
+  const IN_CLAUDE = !!(window.claude && window.claude.use) || /claude\.ai|claudeusercontent|claude\.site/.test(location.hostname);
   function ttsCfg() { try { return JSON.parse(localStorage.getItem(TTS_KEY)) || {}; } catch { return {}; } }
   function toast(msg) {
     const t = document.getElementById('toast');
@@ -524,7 +527,8 @@ body {
     if (btn) { btn.classList.add('playing'); curBtn = btn; }
     const finish = () => { if (btn) btn.classList.remove('playing'); if (curBtn === btn) curBtn = null; };
     const cfg = cfgOverride || ttsCfg();
-    if (cfg.key) {
+    if (cfg.key && IN_CLAUDE && cfgOverride) toast('claude.ai ထဲမှာ ElevenLabs မရပါ — GitHub Pages မှာ သုံးပါ');
+    if (cfg.key && !IN_CLAUDE) {
       try {
         const url = await elevenAudioUrl(text, cfg);
         if (btn && curBtn !== btn) return;   // another line was tapped meanwhile
@@ -567,6 +571,7 @@ body {
     }
     sel.value = cfg.voice || DEFAULT_VOICE;
     document.getElementById('ttsModel').value = cfg.model || 'eleven_flash_v2_5';
+    document.getElementById('ttsEnvHint').style.display = IN_CLAUDE ? 'block' : 'none';
     document.getElementById('settingsOverlay').classList.add('open');
   }
   function closeSettings() { document.getElementById('settingsOverlay').classList.remove('open'); }
@@ -581,6 +586,7 @@ body {
   }
   async function loadVoices() {
     const key = document.getElementById('ttsKey').value.trim();
+    if (IN_CLAUDE) { toast('claude.ai ထဲမှာ ElevenLabs မရပါ — GitHub Pages မှာ သုံးပါ'); return; }
     if (!key) { toast('API key အရင်ထည့်ပါ'); return; }
     const btn = document.getElementById('loadVoicesBtn');
     btn.textContent = 'ယူနေတယ်…';
@@ -616,7 +622,9 @@ body {
       } else if (/^(မှတ်ချက်|Note|Tip|Remember)/i.test(line)) {
         html += '<div class="note-line">' + esc(line) + '</div>';
       } else {
-        html += '<div class="plain-line say-row"><span>' + esc(line) + '</span>' + sayBtn(line) + '</div>';
+        // Burmese explanation lines get no speaker; only all-English lines do
+        const btn = /[က-႟]/.test(line) ? '' : sayBtn(line);
+        html += '<div class="plain-line say-row"><span>' + esc(line) + '</span>' + btn + '</div>';
       }
     }
     return html;
